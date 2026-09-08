@@ -9,6 +9,7 @@ set of omnipotent scripts riddled with `if`s.
 |---|---|---|---|
 | [`glinet/`](glinet/) | GL.iNet travel routers, firmware 4.x (tested: GL-MT3000) | host + remote | **field-verified, in service** |
 | [`rasp-pi/`](rasp-pi/) | Raspberry Pi / Debian 12+ | host + remote | written, **not run on hardware** |
+| [`macos/`](macos/) | macOS 12+, standalone Tailscale build | **host only** | written, **not run on a Mac** |
 | [`windows-ps/`](windows-ps/) | Windows 10/11, PowerShell | **host only** | lib + audit verified on Windows 11; installer not run |
 | [`windows-wsl/`](windows-wsl/) | Ubuntu under WSL2 | **host only** | lib + audit verified on WSL2; installer not run |
 
@@ -18,10 +19,17 @@ Pick the folder that matches the box in front of you and read its `README.md`.
 
 A **remote** is a router: it does NAT, DHCP and DNS for the devices behind it,
 and it needs a **kill-switch** that drops forwarded traffic when the tunnel is
-down. Windows cannot filter routed traffic reliably, and a WSL instance has no
-LAN for anything to route through. Both refuse `role: remote` outright rather
-than shipping something that looks like it works and leaks. Their READMEs
-explain it in full.
+down. That last one is where the general-purpose operating systems fall down:
+
+| | Why not |
+|---|---|
+| **Windows** | Windows Firewall filters traffic to and from the machine, not traffic routed through it, so the kill-switch cannot be made trustworthy |
+| **macOS** | Internet Sharing is not a documented or scriptable interface, and a kill-switch bolted onto something you cannot inspect is one you cannot trust |
+| **WSL** | sits behind a NAT Windows manages, with no LAN for anything to route through and no radio to put an AP on |
+
+All three refuse `role: remote` outright rather than shipping something that
+looks like it works and leaks. An untrusted kill-switch is worse than none: it
+fails open silently while the devices behind it appear fine.
 
 A **host** is far less demanding — advertise, forward, and stay up — which is
 why every platform can be one.
@@ -100,22 +108,24 @@ Templates: [`../networks/example-host.json`](../networks/example-host.json),
 
 Only the first four are required. The rest exist where the platform needs them.
 
-| Script | glinet | rasp-pi | windows-ps | windows-wsl |
-|---|:--:|:--:|:--:|:--:|
-| `tsvpn-lib` | ✅ | ✅ | ✅ | ✅ |
-| `tsvpn-selfheal` | ✅ | ✅ | ✅ | ✅ |
-| `tsvpn-audit` | ✅ | ✅ | ✅ | ✅ |
-| `tsvpn-install` | ✅ | ✅ | ✅ | ✅ |
-| `tsvpn-push` | ✅ | ✅ | — | — |
-| `tsvpn-fix-route` | ✅ | ✅ | — | — |
-| `tsvpn-clone-mac` | ✅ | ✅ | — | — |
-| `tsvpn-persist` | ✅ | — | — | — |
-| `tsvpn-setup-ap` | — | ✅ | — | — |
+| Script | glinet | rasp-pi | macos | windows-ps | windows-wsl |
+|---|:--:|:--:|:--:|:--:|:--:|
+| `tsvpn-lib` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `tsvpn-selfheal` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `tsvpn-audit` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `tsvpn-install` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `tsvpn-push` | ✅ | ✅ | ✅ | — | — |
+| `tsvpn-fix-route` | ✅ | ✅ | — | — | — |
+| `tsvpn-clone-mac` | ✅ | ✅ | — | — | — |
+| `tsvpn-persist` | ✅ | — | — | — | — |
+| `tsvpn-setup-ap` | — | ✅ | — | — | — |
 
-`push` is omitted where there is nothing to push to. `fix-route` and `clone-mac`
-are remote-role tools, so the host-only platforms have no use for them.
-`persist` exists only on GL.iNet, where the config is mirrored into `rc.local`.
-`setup-ap` exists only on the Pi, which has to build its own access point.
+`push` is omitted where there is nothing to push to — Windows has no SSH server
+and WSL is your own machine, while a Mac has Remote Login. `fix-route` and
+`clone-mac` are remote-role tools, so the host-only platforms have no use for
+them. `persist` exists only on GL.iNet, where the config is mirrored into
+`rc.local`. `setup-ap` exists only on the Pi, which has to build its own access
+point.
 
 ### 4. The same install shape
 

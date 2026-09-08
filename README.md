@@ -95,6 +95,7 @@ actually reachable (§2).
 | **[`scripts/`](scripts/)** | one folder per hardware platform, and the contract they all implement |
 | **[`scripts/glinet/`](scripts/glinet/)** | GL.iNet travel routers — host + remote. **Field-verified**, in service |
 | **[`scripts/rasp-pi/`](scripts/rasp-pi/)** | Raspberry Pi / Debian — host + remote. Written, not run on hardware |
+| **[`scripts/macos/`](scripts/macos/)** | macOS — **host only** |
 | **[`scripts/windows-ps/`](scripts/windows-ps/)** | Windows 10/11 (PowerShell) — **host only** |
 | **[`scripts/windows-wsl/`](scripts/windows-wsl/)** | Ubuntu under WSL2 — **host only** |
 | **[`networks/`](networks/)** | your deployments: one small JSON file per machine. Git-ignored |
@@ -133,11 +134,12 @@ The step-by-step for your hardware, from unboxing to troubleshooting:
 |---|---|
 | GL.iNet travel router | [`scripts/glinet/README.md`](scripts/glinet/README.md) |
 | Raspberry Pi / Debian | [`scripts/rasp-pi/README.md`](scripts/rasp-pi/README.md) |
+| macOS | [`scripts/macos/README.md`](scripts/macos/README.md) |
 | Windows 10/11 | [`scripts/windows-ps/README.md`](scripts/windows-ps/README.md) |
 | Ubuntu under WSL2 | [`scripts/windows-wsl/README.md`](scripts/windows-wsl/README.md) |
 
-Only GL.iNet and Pi can be a **remote**; Windows and WSL are **host only**, for
-reasons their READMEs set out.
+Only GL.iNet and Raspberry Pi can be a **remote**. macOS, Windows and WSL are
+**host only**, for reasons their READMEs set out.
 
 ---
 

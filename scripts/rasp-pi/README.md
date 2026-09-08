@@ -222,6 +222,23 @@ optional Pi-specific keys.
 | `lan_iface` | remote | optional. The interface clients join. Default `wlan0` |
 | `lan_cidr` | remote | optional. The Pi's address on that interface. Default `192.168.9.1/24` |
 
+### A remote advertises nothing
+
+Only the host advertises. The self-heal runs
+`tailscale set --advertise-routes= --advertise-exit-node=false` on a remote, and
+the audit fails if anything reappears. The VPN is one-way by design: remote to
+host, never back. See the [root README](../../README.md#it-only-goes-one-way).
+
+### The other way to do DNS
+
+By default the host answers a remote's lookups with dnsmasq. You can skip that:
+advertise the resolver your host site already uses as a **target**, and set the
+remote's `dns_upstream` to it. Same outcome as far as design §3.5 is concerned,
+and no forwarder needed on the host. Worked example in
+[`../windows-ps/README.md` §5](../windows-ps/README.md#5-dns--read-this-before-adding-a-remote).
+
+### About `collide`
+
 `collide` is accepted for compatibility with the GL.iNet files but is not needed
 here: this build pins every target to the tunnel unconditionally (§6.4), so a
 colliding site LAN is handled whether or not you declare it.

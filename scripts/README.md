@@ -82,6 +82,9 @@ Templates: [`../networks/example-host.json`](../networks/example-host.json),
 
 - **`node.json` is the only unique file.** Everything else is byte-identical
   across every router of every deployment on that platform.
+- **One-way.** Only a host advertises. A remote's self-heal clears
+  advertisements explicitly and its audit fails if any reappear, because a
+  vendor default can silently re-offer the remote site's LAN to your tailnet.
 - **The self-heal is also the provisioner.** Configuring a new box is: write the
   JSON, run the installer. There is no separate configuration step.
 - **Idempotent.** Re-running anything is always safe.
@@ -92,6 +95,27 @@ Templates: [`../networks/example-host.json`](../networks/example-host.json),
   *How* is platform-specific: GL.iNet embeds a copy of everything in
   `/etc/rc.local`, because that is the one file its updates preserve. A Pi would
   use a systemd unit and ordinary package management.
+
+### Which scripts a platform actually ships
+
+Only the first four are required. The rest exist where the platform needs them.
+
+| Script | glinet | rasp-pi | windows-ps | windows-wsl |
+|---|:--:|:--:|:--:|:--:|
+| `tsvpn-lib` | ✅ | ✅ | ✅ | ✅ |
+| `tsvpn-selfheal` | ✅ | ✅ | ✅ | ✅ |
+| `tsvpn-audit` | ✅ | ✅ | ✅ | ✅ |
+| `tsvpn-install` | ✅ | ✅ | ✅ | ✅ |
+| `tsvpn-push` | ✅ | ✅ | — | — |
+| `tsvpn-fix-route` | ✅ | ✅ | — | — |
+| `tsvpn-clone-mac` | ✅ | ✅ | — | — |
+| `tsvpn-persist` | ✅ | — | — | — |
+| `tsvpn-setup-ap` | — | ✅ | — | — |
+
+`push` is omitted where there is nothing to push to. `fix-route` and `clone-mac`
+are remote-role tools, so the host-only platforms have no use for them.
+`persist` exists only on GL.iNet, where the config is mirrored into `rc.local`.
+`setup-ap` exists only on the Pi, which has to build its own access point.
 
 ### 4. The same install shape
 

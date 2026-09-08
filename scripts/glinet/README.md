@@ -664,14 +664,44 @@ edit. Real ones are git-ignored; the examples are not.
 | `targets` | both | bare IPv4 addresses at the host site to make reachable. No `/32`, no port. Same list on every router |
 | `exit_node` | remote | the **host router's `100.x` address**. Required |
 | `collide` | remote | the remote site's LAN range, *only if* it collides with the range you route into (design §3.2). Omit otherwise |
-| `dns_upstream` | remote | optional list. **Leave it out** — DNS then resolves through the host, which is the whole point (design §3.5) |
+| `dns_upstream` | remote | optional list. **Leave it out** — DNS then resolves through the host, which is the whole point (design §3.5). Set it only if you are using the resolver-as-a-target approach below |
 
 Anything else you add (`_comment`, notes of your own) is ignored.
+
+### A remote advertises nothing
+
+Only the host advertises. The self-heal runs
+`tailscale set --advertise-routes= --advertise-exit-node=false` on a remote,
+and the audit fails if anything reappears.
+
+This is not cosmetic. The GL.iNet Tailscale plugin advertises the router's own
+LAN by default, and `tailscale set --exit-node=…` does **not** clear it. The
+advertisement then sits unapproved and inert — until somebody approves it in the
+console, and that whole site becomes reachable from your tailnet. The VPN is
+one-way by design: remote to host, never back.
 
 ### Why `targets` goes on every router
 
 The host **advertises** each address as a `/32`; a remote needs the list so its
 collision fix knows which addresses to pin to the tunnel. Keep them identical.
+
+### The other way to do DNS
+
+By default the host answers the remote's lookups with its own dnsmasq. You can
+instead skip that entirely: advertise the resolver your host site already uses
+as a **target**, and point the remote straight at it.
+
+```jsonc
+// host                                    // remote
+{ "targets": ["192.0.2.10", "192.168.1.1"] }
+{ "targets": ["192.0.2.10", "192.168.1.1"],
+  "dns_upstream": ["192.168.1.1"] }
+```
+
+Add `192.168.1.1/32` to `autoApprovers` like any other target. The result is the
+same as far as design §3.5 is concerned — the remote's clients resolve through
+the resolver every device at the host site uses, egressing at the host site's IP.
+It is the only option on a host with no forwarder, such as Windows.
 
 ### Adding a device to reach at the host site
 

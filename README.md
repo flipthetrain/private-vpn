@@ -215,11 +215,37 @@ Independent, separately approved, and easy to confuse.
 | Flag | `--advertise-routes=` | `--advertise-exit-node` |
 | Needed for | talking to the device | making cloud services *think* you are at the host site |
 
+### Why you usually need both
+
 The subnet route alone suffices for a device you address directly. You also need
 the exit node whenever **cloud discovery** is involved: the app asks a vendor API
 "what is registered to my public IP?", and the answer is only right if your
-traffic egresses from the host site's IP. The vendor hands back a *private* address,
-which the subnet route then carries.
+traffic egresses from the host site's IP. The vendor hands back a *private*
+address, which the subnet route then carries.
+
+### It only goes one way
+
+**Only the host advertises anything.** A remote selects the exit node and accepts
+routes; it offers nothing back. So devices at the host site cannot reach devices
+behind a remote, and that is deliberate — you are extending your own network
+outward, not merging someone else's into it.
+
+Two things enforce it, independently:
+
+- a remote **NATs its clients** into the tunnel (§3.3), so they have no presence
+  on the tailnet at all
+- nothing installs a route to a remote's LAN, because nothing advertises one
+
+Watch for the second one drifting. Some router firmware advertises the box's own
+LAN by default, and `tailscale set --exit-node=…` does **not** clear an existing
+advertisement. It then sits unapproved and inert — until somebody clicks approve
+in the console, at which point that whole site becomes reachable from your
+tailnet. Every platform's self-heal clears advertisements on a remote explicitly,
+and its audit fails if one reappears.
+
+If you ever do want it bidirectional, the knob is: advertise the remote's LAN,
+approve it, and drop the masquerade. That is a real change in exposure, not a
+toggle.
 
 ## 3. Design requirements
 

@@ -1,0 +1,9 @@
+{
+  "_comment": "The HOST router: the one at the host site. Exactly one per deployment. Copy to networks/<your-tailnet>/<name>.json and edit. See networks/README.md.",
+
+  "deployment": "you@example.com",
+  "node": "example-host",
+  "role": "host",
+
+  "targets": ["192.0.2.10"]
+}

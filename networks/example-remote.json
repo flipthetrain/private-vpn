@@ -1,0 +1,12 @@
+{
+  "_comment": "A REMOTE router: one per remote site. Add as many as you like. Copy to networks/<your-tailnet>/<name>.json and edit. See networks/README.md.",
+
+  "deployment": "you@example.com",
+  "node": "example-remote",
+  "role": "remote",
+
+  "targets": ["192.0.2.10"],
+  "exit_node": "100.64.0.1",
+
+  "collide": "192.168.1.0/24"
+}

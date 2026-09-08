@@ -1,0 +1,12 @@
+# Real deployments live in networks/<tailnet>/ and stay on this machine:
+# they hold addresses, node IDs, SSIDs and public IPs.
+# The examples and the README in networks/ ARE committed.
+networks/*
+!networks/README.md
+!networks/example-host.json
+!networks/example-remote.json
+
+# Legacy naming, kept so any pre-move files stay ignored rather than
+# accidentally committed.
+config-*
+tailnet-*

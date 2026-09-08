@@ -1,0 +1,197 @@
+#!/bin/sh
+# ============================================================
+#  tsvpn-selfheal.sh — rebuild this router's VPN configuration.
+#
+#  Runs at every boot from /etc/rc.local, and may be run by hand
+#  at any time. Idempotent and safe to re-run on either role.
+#
+#  WHY THIS EXISTS: every GL.iNet firmware update silently breaks
+#  the setup. It destroys /root/*.sh and /etc/hotplug.d/iface/*,
+#  resets firewall.tailscale0.masq, restores the *->wan
+#  forwardings the kill-switch removed, and resets the Tailscale
+#  route advertisements and exit-node selection. The box comes
+#  back looking healthy in the Tailscale console while the tunnel
+#  carries nothing.
+#
+#  This is also the PROVISIONER: it applies scripts/glinet/README.md section 5
+#  and 8 in full. Configuring a new router is nothing more than
+#  writing node.json and running this.
+#
+#  Generic. All values come from /etc/tsvpn/node.json.
+#  See scripts/glinet/README.md sections 3 and 7.
+# ============================================================
+. /etc/tsvpn/tsvpn-lib.sh
+tsvpn_load || exit 1
+tsvpn_check || exit 1
+
+echo "== tsvpn self-heal: ${NODE:-$(uci -q get system.@system[0].hostname)} role=$ROLE $(date) =="
+[ -n "$DEPLOYMENT" ] && echo "deployment: $DEPLOYMENT"
+echo "targets   : ${TARGETS:-<none>}"
+[ "$ROLE" = "remote" ] && echo "exit node : $EXIT_NODE"
+[ "$ROLE" = "remote" ] && echo "dns       : $DNS_UPSTREAM"
+
+# --- wait for tailscaled (the first boot after a flash is slow) ---
+i=0
+while [ $i -lt 60 ]; do
+	tailscale status >/dev/null 2>&1 && break
+	sleep 5
+	i=$((i + 1))
+done
+echo "tailscaled ready after $((i * 5))s"
+
+# --- GL.iNet Tailscale plugin toggles ---
+# Only present on GL.iNet firmware. On plain OpenWrt there is no
+# /etc/config/tailscale and tailscaled is managed directly, so skip it.
+if [ -f /etc/config/tailscale ]; then
+	uci -q set tailscale.settings.enabled='1'
+	uci -q set tailscale.settings.lan_enabled='1'
+	[ "$ROLE" = "host" ] && uci -q set tailscale.settings.wan_enabled='1'
+	uci -q commit tailscale
+else
+	echo "note: no /etc/config/tailscale — not GL.iNet firmware, skipping plugin toggles"
+fi
+
+# --- firewall: common to both roles ---
+uci -q set firewall.tailscale0=zone
+uci -q set firewall.tailscale0.name='tailscale0'
+uci -q set firewall.tailscale0.device='tailscale0'
+uci -q set firewall.tailscale0.input='ACCEPT'      # admin over the tunnel, and nowhere else
+uci -q set firewall.tailscale0.mtu_fix='1'         # section 3.4: or video stalls while UIs load
+uci -q set firewall.lan_tailscale=forwarding
+uci -q set firewall.lan_tailscale.src='lan'
+uci -q set firewall.lan_tailscale.dest='tailscale0'
+
+if [ "$ROLE" = "host" ]; then
+	# ---------- exit-node SERVER ----------
+	# No masq here: the wan zone already SNATs both exit-node egress and the
+	# subnet route. Setting it twice breaks return traffic.
+	uci -q delete firewall.tailscale0.masq
+	uci -q set firewall.tailscale_lan=forwarding
+	uci -q set firewall.tailscale_lan.src='tailscale0'
+	uci -q set firewall.tailscale_lan.dest='lan'
+	uci -q set firewall.wan_tailscale=forwarding
+	uci -q set firewall.wan_tailscale.src='wan'
+	uci -q set firewall.wan_tailscale.dest='tailscale0'
+	# tailscale0 -> wan is what actually carries exit-node traffic to the
+	# internet. Without it the exit node is selected and nothing flows.
+	uci -q set firewall.tailscale_wan=forwarding
+	uci -q set firewall.tailscale_wan.src='tailscale0'
+	uci -q set firewall.tailscale_wan.dest='wan'
+
+	# DNS (section 3.5): this box resolves via the network it is plugged into
+	# -- its WAN DHCP resolver, the same one every other device at the host site uses --
+	# and serves those answers to the tailnet. A remote site then gets exactly
+	# what a device sitting at the host site gets: same resolver, same egress, nothing
+	# for a service to correlate.
+	uci -q delete dhcp.@dnsmasq[0].server        # no hardcoded upstream
+	uci -q delete dhcp.@dnsmasq[0].noresolv      # use the network we are on
+	# localservice=0 is REQUIRED: tailscale0 is a /32, which dnsmasq's
+	# `local-service` reads as "no local subnet", so it silently refuses
+	# queries from remote tailnet peers. The wan zone is input DROP, so this
+	# does not expose a resolver off-box.
+	uci -q set dhcp.@dnsmasq[0].localservice='0'
+else
+	# ---------- the REMOTE (exit-node client) ----------
+	# masq is REQUIRED (section 3.3). Both GL.iNet routers ship the same
+	# 192.168.8.0/24 LAN, so un-NATed client traffic arrives at the host
+	# sourced from a range the host routes to its OWN br-lan, and is dropped.
+	# Symptom if missing: this router works over the tunnel, nothing behind
+	# it does.
+	uci -q set firewall.tailscale0.masq='1'
+
+	# KILL-SWITCH (section 8): clients may reach the internet ONLY via the
+	# tunnel. GL.iNet restores lan->wan (and guest/iot->wan) on every firmware
+	# update, which silently reopens a direct path out of the site's own
+	# uplink. Strip every *->wan forwarding. The index does NOT advance on
+	# delete, because uci renumbers.
+	i=0
+	while [ $i -lt 20 ]; do
+		d=$(uci -q get firewall.@forwarding[$i].dest)
+		[ -z "$d" ] && break
+		if [ "$d" = "wan" ]; then
+			echo "  kill-switch: dropping $(uci -q get firewall.@forwarding[$i].src) -> wan"
+			uci -q delete firewall.@forwarding[$i]
+		else
+			i=$((i + 1))
+		fi
+	done
+
+	# DNS (section 3.5): resolve through the HOST, so the resolver egress IP
+	# and the client egress IP are the same address. noresolv stops dnsmasq
+	# falling back to THIS site's resolver, which is the leak that tells a
+	# service you are on a VPN.
+	#
+	# `server` is a uci LIST. `uci set` writes a scalar, which the dnsmasq init
+	# script SILENTLY IGNORES, leaving no-resolv with no upstream at all.
+	# Symptom: direct-IP traffic works perfectly and every name lookup times
+	# out, which presents as "no internet". Must be delete + add_list.
+	uci -q set dhcp.@dnsmasq[0].noresolv='1'
+	uci -q delete dhcp.@dnsmasq[0].server
+	for s in $DNS_UPSTREAM; do
+		uci -q add_list dhcp.@dnsmasq[0].server="$s"
+	done
+
+	# No IPv6 on the LAN (section 3.6): if the tunnel does not carry v6,
+	# clients leak over v6 while v4 looks perfect.
+	uci -q set dhcp.lan.ra='disabled'
+	uci -q set dhcp.lan.dhcpv6='disabled'
+fi
+
+uci -q commit dhcp
+uci -q commit firewall
+/etc/init.d/dnsmasq restart >/dev/null 2>&1
+/etc/init.d/firewall restart >/dev/null 2>&1
+
+# --- subnet-collision fix: hotplug hook + cron backstop (remote only) ---
+# /etc/hotplug.d/iface/ is REPLACED wholesale by a firmware update, so the
+# hook has to be rewritten here rather than merely installed once.
+if [ "$ROLE" = "remote" ] && [ -n "$COLLIDE" ]; then
+	mkdir -p /etc/hotplug.d/iface
+	cat > /etc/hotplug.d/iface/99-tsvpn-route <<'HOTPLUG'
+#!/bin/sh
+[ "$ACTION" = "ifup" ] || exit 0
+( sleep 8; /etc/tsvpn/tsvpn-fix-route.sh ) &
+HOTPLUG
+	chmod +x /etc/hotplug.d/iface/99-tsvpn-route
+
+	grep -q tsvpn-fix-route /etc/crontabs/root 2>/dev/null || \
+		echo '*/5 * * * * /etc/tsvpn/tsvpn-fix-route.sh' >> /etc/crontabs/root
+	# drop any stale entry from the older /root layout
+	if grep -q '/root/fix-target-route.sh' /etc/crontabs/root 2>/dev/null; then
+		grep -v '/root/fix-target-route.sh' /etc/crontabs/root > /tmp/ct.$$ && \
+			cat /tmp/ct.$$ > /etc/crontabs/root && rm -f /tmp/ct.$$
+	fi
+	/etc/init.d/cron enable >/dev/null 2>&1
+	/etc/init.d/cron restart >/dev/null 2>&1
+fi
+
+# --- the bit firmware updates always clobber: control-plane prefs ---
+# GL.iNet's Tailscale plugin re-derives --advertise-routes from its own UI
+# toggles on first boot, replacing a /32 with the whole /24 and dropping
+# --advertise-exit-node entirely.
+if [ "$ROLE" = "host" ]; then
+	if [ -n "$ROUTES" ]; then
+		tailscale set --advertise-exit-node --advertise-routes="$ROUTES"
+	else
+		tailscale set --advertise-exit-node --advertise-routes=
+	fi
+else
+	# A remote advertises NOTHING. The GL.iNet plugin advertises the box's own
+	# LAN by default, and `tailscale set --exit-node=...` does not clear it, so
+	# without this the remote keeps offering its LAN to the tailnet. It sits
+	# unapproved and inert -- until somebody clicks approve in the console, and
+	# then every device at the remote site is reachable from the tailnet. This
+	# VPN is one-way by design: remote -> host, never the reverse.
+	tailscale set --advertise-routes= --advertise-exit-node=false \
+		--exit-node="$EXIT_NODE" --exit-node-allow-lan-access --accept-routes
+	sleep 2
+	[ -x /etc/tsvpn/tsvpn-fix-route.sh ] && /etc/tsvpn/tsvpn-fix-route.sh
+fi
+
+echo
+echo "-- verify --"
+sleep 3
+/etc/tsvpn/tsvpn-audit.sh
+rc=$?
+echo "== done $(date) =="
+exit $rc

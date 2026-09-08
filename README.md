@@ -93,8 +93,10 @@ actually reachable (§2).
 |---|---|
 | **this file** | the design: what gets built, and why each requirement exists. Platform-independent |
 | **[`scripts/`](scripts/)** | one folder per hardware platform, and the contract they all implement |
-| **[`scripts/glinet/`](scripts/glinet/)** | GL.iNet travel routers — **field-verified**, in service |
-| **[`scripts/pi5/`](scripts/pi5/)** | Raspberry Pi 5 / Debian — **written, not yet run on hardware** |
+| **[`scripts/glinet/`](scripts/glinet/)** | GL.iNet travel routers — host + remote. **Field-verified**, in service |
+| **[`scripts/pi5/`](scripts/pi5/)** | Raspberry Pi 5 / Debian — host + remote. Written, not run on hardware |
+| **[`scripts/windows-dos/`](scripts/windows-dos/)** | Windows 10/11 (PowerShell) — **host only** |
+| **[`scripts/windows-wsl/`](scripts/windows-wsl/)** | Ubuntu under WSL2 — **host only** |
 | **[`networks/`](networks/)** | your deployments: one small JSON file per machine. Git-ignored |
 
 ## Getting started
@@ -127,8 +129,15 @@ and then verifies its own work.
 
 The step-by-step for your hardware, from unboxing to troubleshooting:
 
-- **GL.iNet routers → [`scripts/glinet/README.md`](scripts/glinet/README.md)**
-- **Raspberry Pi → [`scripts/pi5/README.md`](scripts/pi5/README.md)**
+| Your hardware | Read |
+|---|---|
+| GL.iNet travel router | [`scripts/glinet/README.md`](scripts/glinet/README.md) |
+| Raspberry Pi / Debian | [`scripts/pi5/README.md`](scripts/pi5/README.md) |
+| Windows 10/11 | [`scripts/windows-dos/README.md`](scripts/windows-dos/README.md) |
+| Ubuntu under WSL2 | [`scripts/windows-wsl/README.md`](scripts/windows-wsl/README.md) |
+
+Only GL.iNet and Pi can be a **remote**; Windows and WSL are **host only**, for
+reasons their READMEs set out.
 
 ---
 
@@ -294,6 +303,24 @@ closed**: a broken tunnel costs clients their DNS entirely, rather than leaking
 to the local resolver and quietly giving you away. Each machine's own lookups
 may still go direct — that carries no client traffic and keeps the box
 manageable on-site when the tunnel is down.
+
+### Two ways to satisfy this
+
+The requirement is about *where the query comes out*, not about which software
+answers it. So there are two valid arrangements:
+
+| | How | Use when |
+|---|---|---|
+| **Host resolves** | the host runs a forwarder (dnsmasq) on its tailnet address; the remote points at the host | the host is a router or a Linux box — the default on GL.iNet and Pi |
+| **Resolver as a target** | advertise the host site's own resolver as a `/32` target; the remote's `dns_upstream` points straight at it | the host has no forwarder — Windows — or you would rather not run one |
+
+Both end with the remote's clients resolving through the host site's own
+resolver, at the host site's IP. The second needs no software on the host at
+all: the resolver is just another device you have made reachable, exactly like
+a media server. It costs one extra `autoApprovers` entry.
+
+Travelling laptops and phones need neither: with an exit node selected,
+Tailscale routes their DNS through the exit node itself.
 
 ### 3.6 No IPv6 unless the tunnel carries it
 

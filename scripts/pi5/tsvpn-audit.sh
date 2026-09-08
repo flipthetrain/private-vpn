@@ -199,11 +199,25 @@ fi
 
 echo
 echo "-- name resolution (the check a route test misses) --"
-if have dig; then Q="dig +short +time=3 +tries=1 github.com"; else Q="nslookup github.com"; fi
-$Q 127.0.0.1 >/dev/null 2>&1 && ok "this box resolves names locally" || wn "no local resolver answered on 127.0.0.1"
+# getent uses the system resolver and ships with glibc. dig and nslookup are NOT
+# installed on a default image, so testing with them reports a failure that is
+# really a missing package. Note dig needs @server, not a bare argument.
+getent hosts github.com >/dev/null 2>&1 && ok "this box resolves names" || no "name resolution FAILS on this box"
 if [ "$ROLE" = "remote" ] && [ -n "$LAN_ADDR" ]; then
-	$Q "$LAN_ADDR" >/dev/null 2>&1 && ok "clients can resolve via $LAN_ADDR" \
-		|| no "clients CANNOT resolve via $LAN_ADDR — this presents to the user as 'no internet'"
+	if have dig; then
+		R=$(dig +short +time=3 +tries=1 @"$LAN_ADDR" github.com 2>/dev/null)
+	elif have nslookup; then
+		R=$(nslookup github.com "$LAN_ADDR" 2>/dev/null | sed -n "s/^Address: //p")
+	else
+		R=""; NOTOOL=1
+	fi
+	if [ -n "${NOTOOL:-}" ]; then
+		wn "cannot test what clients see: install dnsutils to check $LAN_ADDR answers"
+	elif [ -n "$R" ]; then
+		ok "clients can resolve via $LAN_ADDR"
+	else
+		no "clients CANNOT resolve via $LAN_ADDR — this presents to the user as 'no internet'"
+	fi
 fi
 
 echo

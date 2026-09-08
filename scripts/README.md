@@ -5,12 +5,26 @@ lives in [`../README.md`](../README.md);
 the **implementation** is not, so each platform gets its own set rather than one
 set of omnipotent scripts riddled with `if`s.
 
-| Folder | Platform | Status |
-|---|---|---|
-| [`glinet/`](glinet/) | GL.iNet travel routers, firmware 4.x (tested: GL-MT3000) | **in service** |
-| `pi5/` | Raspberry Pi 5 | planned |
+| Folder | Platform | Roles | Status |
+|---|---|---|---|
+| [`glinet/`](glinet/) | GL.iNet travel routers, firmware 4.x (tested: GL-MT3000) | host + remote | **field-verified, in service** |
+| [`pi5/`](pi5/) | Raspberry Pi 5 / Debian 12+ | host + remote | written, **not run on hardware** |
+| [`windows-dos/`](windows-dos/) | Windows 10/11, PowerShell | **host only** | lib + audit verified on Windows 11; installer not run |
+| [`windows-wsl/`](windows-wsl/) | Ubuntu under WSL2 | **host only** | lib + audit verified on WSL2; installer not run |
 
 Pick the folder that matches the box in front of you and read its `README.md`.
+
+### Only two platforms can be a remote
+
+A **remote** is a router: it does NAT, DHCP and DNS for the devices behind it,
+and it needs a **kill-switch** that drops forwarded traffic when the tunnel is
+down. Windows cannot filter routed traffic reliably, and a WSL instance has no
+LAN for anything to route through. Both refuse `role: remote` outright rather
+than shipping something that looks like it works and leaks. Their READMEs
+explain it in full.
+
+A **host** is far less demanding — advertise, forward, and stay up — which is
+why every platform can be one.
 
 ---
 
@@ -58,7 +72,7 @@ Templates: [`../networks/example-host.json`](../networks/example-host.json),
 
 | Script | Job |
 |---|---|
-| `tsvpn-push.sh` | from your machine: copy this folder + a node JSON to the box, run the installer |
+| `tsvpn-push.sh` | from your machine: copy this folder + a node JSON to the box, run the installer. *Omit where there is nothing to push to — Windows has no SSH server, and WSL is your own machine* |
 | `tsvpn-install.sh` | on the box: install everything, arrange for it to survive an OS/firmware update, apply, audit |
 | `tsvpn-selfheal.sh` | on the box: rebuild the whole configuration from `node.json`. Idempotent, runs at boot |
 | `tsvpn-audit.sh` | on the box: read-only; verify every requirement in README.md §3. Exit 1 on any failure |

@@ -85,7 +85,7 @@ tsvpn_check() {
 		echo "  console or phone on the local network can use it as a gateway." >&2
 		echo "  There is no route to it and no way to hand one out." >&2
 		echo "" >&2
-		echo "  For a remote, use scripts/glinet/ or scripts/pi5/ on real hardware." >&2
+		echo "  For a remote, use scripts/glinet/ or scripts/rasp-pi/ on real hardware." >&2
 		rc=1
 	fi
 	for t in $TARGETS; do

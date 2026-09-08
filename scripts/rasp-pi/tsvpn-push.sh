@@ -1,6 +1,6 @@
 #!/bin/sh
 # ============================================================
-#  tsvpn-push.sh — convenience wrapper. Copies this scripts/pi5/
+#  tsvpn-push.sh — convenience wrapper. Copies this scripts/rasp-pi/
 #  folder plus one node.json to a Pi and runs the installer there.
 #  Run from YOUR machine.
 #

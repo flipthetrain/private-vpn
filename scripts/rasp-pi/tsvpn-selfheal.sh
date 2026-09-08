@@ -7,7 +7,7 @@
 #  role.
 #
 #  This is also the PROVISIONER: it applies everything in
-#  scripts/pi5/README.md section 5. Configuring a new machine is
+#  scripts/rasp-pi/README.md section 5. Configuring a new machine is
 #  nothing more than writing node.json and running this.
 #
 #  WHY IT EXISTS ON A PI: unlike GL.iNet firmware, Debian does not

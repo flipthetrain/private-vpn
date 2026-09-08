@@ -82,7 +82,7 @@ function Test-TsvpnNode {
         Write-Host "  a kill-switch you cannot trust is worse than none: it fails open,"
         Write-Host "  quietly, and the devices behind it leak while appearing to work."
         Write-Host ""
-        Write-Host "  For a remote, use scripts/glinet/ or scripts/pi5/ on real hardware."
+        Write-Host "  For a remote, use scripts/glinet/ or scripts/rasp-pi/ on real hardware."
         Write-Host ""
         $ok = $false
     }

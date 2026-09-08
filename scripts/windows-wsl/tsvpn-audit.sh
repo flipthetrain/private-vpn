@@ -29,7 +29,7 @@ inf "targets   : ${TARGETS:-<none>}"
 
 echo
 echo "-- wsl environment --"
-wsl_is_wsl && ok "running under WSL" || wn "this does not look like WSL — scripts/pi5/ is the better fit"
+wsl_is_wsl && ok "running under WSL" || wn "this does not look like WSL — scripts/rasp-pi/ is the better fit"
 wsl_has_systemd && ok "systemd is PID 1 (services can start at boot)" \
 	|| no "systemd is NOT PID 1 — nothing will start tailscaled automatically. Set systemd=true in /etc/wsl.conf, then 'wsl --shutdown'"
 wsl_has_tun && ok "/dev/net/tun present" || no "/dev/net/tun missing — Tailscale cannot create its interface. Run 'wsl --update' from Windows"

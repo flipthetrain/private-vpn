@@ -51,7 +51,7 @@ Its weakness is that it is a general-purpose computer: it sleeps, it reboots for
 updates, and someone might turn it off. A host that is asleep is a host that is
 down, and every remote depending on it goes dark. If anyone else relies on this
 deployment, put the host on hardware that stays up — see
-[`../glinet/`](../glinet/) or [`../pi5/`](../pi5/).
+[`../glinet/`](../glinet/) or [`../rasp-pi/`](../rasp-pi/).
 
 **As a remote — no.** Not supported, and the scripts refuse it rather than
 half-doing it. See §9.
@@ -268,4 +268,4 @@ exists to prevent, and it is undetectable from the couch.
 
 So the scripts refuse `role: remote` outright rather than shipping something
 that appears to work. For a remote, use [`../glinet/`](../glinet/) or
-[`../pi5/`](../pi5/) on hardware built for it.
+[`../rasp-pi/`](../rasp-pi/) on hardware built for it.

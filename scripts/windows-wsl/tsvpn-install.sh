@@ -28,7 +28,7 @@ fi
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required (it reads node.json)" >&2; exit 1; }
 
 # ---------- WSL prerequisites, checked before anything is changed ----------
-grep -qi microsoft /proc/version 2>/dev/null || echo "note: this does not look like WSL; scripts/pi5/ is the better fit"
+grep -qi microsoft /proc/version 2>/dev/null || echo "note: this does not look like WSL; scripts/rasp-pi/ is the better fit"
 
 FATAL=""
 [ "$(ps -p 1 -o comm= 2>/dev/null)" = "systemd" ] || FATAL="$FATAL systemd"

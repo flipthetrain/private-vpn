@@ -1,14 +1,14 @@
-# scripts/pi5/ — Raspberry Pi 5
+# scripts/rasp-pi/ — Raspberry Pi
 
-The implementation for a **Raspberry Pi 5 running Raspberry Pi OS (Bookworm)**
+The implementation for a **Raspberry Pi running Raspberry Pi OS (Bookworm)**
 or any recent Debian. For other hardware see [`../README.md`](../README.md) —
 the design is shared, the scripts are not.
 
 > ## ⚠️ Not yet verified on hardware
 >
 > These scripts were written against the same contract as the GL.iNet set and
-> are syntax-checked, but **no Pi 5 was available to run them on**. The GL.iNet
-> set is field-verified; this one is not.
+> are syntax-checked, but **no Raspberry Pi was available to run them on**.
+> The GL.iNet set is field-verified; this one is not.
 >
 > Nothing here writes anything until you run the installer, and the installer
 > refuses to start if a prerequisite is missing. But treat the first run as
@@ -39,7 +39,7 @@ or someone else's, is one small JSON file: `/etc/tsvpn/node.json`.
 ## 1. What a Pi is good at here
 
 **As a host** — the machine at the host site that is the exit node and subnet router — a
-Pi 5 is an excellent fit and the simpler of the two roles. It sits on the host
+a Pi is an excellent fit and the simpler of the two roles. It sits on the host
 site's LAN by ethernet, needs no access point, and Tailscale does most of the work
 itself. If you only want one thing from this folder, make it this.
 
@@ -50,16 +50,16 @@ is here, but there are more moving parts than the GL.iNet equivalent, and the
 Pi's built-in radio is a modest AP. Prefer ethernet for the clients where you
 can.
 
-A Pi 5 has **one** ethernet port. On a remote that port is the *uplink*, so the
-LAN side has to be the WiFi AP — or a USB ethernet adapter if you would rather
-give clients a cable.
+A Raspberry Pi has **one** ethernet port. On a remote that port is the
+*uplink*, so the LAN side has to be the WiFi AP — or a USB ethernet adapter if
+you would rather give clients a cable.
 
 ---
 
 ## 2. Requirements
 
-- **Raspberry Pi 5** (a 4 will do; nothing here is 5-specific) running
-  **Raspberry Pi OS Bookworm** or Debian 12+.
+- **A Raspberry Pi** — a 4 or 5, and a 3 will do — running **Raspberry Pi OS
+  Bookworm** or Debian 12+. Nothing here is specific to any model.
 - **A wired uplink** for the remote role — the ethernet port goes to the site's
   network, exactly like the GL.iNet WAN port.
 - Packages: `tailscale`, `dnsmasq`, and for the remote role `nftables`.
@@ -426,7 +426,7 @@ not anticipate.
 Same design, same `node.json`, same audit contract. The mechanisms differ
 because the platforms do.
 
-| | GL.iNet | Pi 5 |
+| | GL.iNet | Raspberry Pi |
 |---|---|---|
 | Config system | `uci` | files in `/etc` |
 | Firewall | fw3 / iptables via `uci` | our own `nftables` tables |

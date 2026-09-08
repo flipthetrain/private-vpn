@@ -34,7 +34,7 @@ tsvpn_get() {
 tsvpn_load() {
 	if [ ! -f "$TSVPN_NODE" ]; then
 		echo "tsvpn: no $TSVPN_NODE — this machine has no identity." >&2
-		echo "tsvpn: create it (see scripts/pi5/README.md) or re-run tsvpn-install.sh." >&2
+		echo "tsvpn: create it (see scripts/rasp-pi/README.md) or re-run tsvpn-install.sh." >&2
 		return 1
 	fi
 
@@ -59,7 +59,7 @@ tsvpn_load() {
 	 'EXIT_NODE':  d.get('exit_node',''),
 	 'COLLIDE':    d.get('collide',''),
 	 'DNS_UPSTREAM': lst('dns_upstream'),
-	 # --- pi5-specific, all optional ---
+	 # --- Raspberry Pi specific, all optional ---
 	 'WAN_IFACE':  d.get('wan_iface',''),
 	 'LAN_IFACE':  d.get('lan_iface',''),
 	 'LAN_CIDR':   d.get('lan_cidr',''),

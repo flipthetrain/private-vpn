@@ -43,7 +43,7 @@ while the distro is running, and the distro stops when:
 A host that is down takes every remote depending on it dark, with no warning
 beyond things quietly not working. **If anyone but you depends on this
 deployment, do not host it on WSL** — use [`../glinet/`](../glinet/) or
-[`../pi5/`](../pi5/).
+[`../rasp-pi/`](../rasp-pi/).
 
 Where WSL genuinely fits: you already develop in WSL, the machine is on anyway,
 and you want your own laptop and phone to egress from the host site while
@@ -209,4 +209,4 @@ put an access point on.
 
 This is a structural limit, not a missing feature, so the scripts refuse
 `role: remote` outright. For a remote, use [`../glinet/`](../glinet/) or
-[`../pi5/`](../pi5/).
+[`../rasp-pi/`](../rasp-pi/).

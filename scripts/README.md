@@ -8,7 +8,7 @@ set of omnipotent scripts riddled with `if`s.
 | Folder | Platform | Roles | Status |
 |---|---|---|---|
 | [`glinet/`](glinet/) | GL.iNet travel routers, firmware 4.x (tested: GL-MT3000) | host + remote | **field-verified, in service** |
-| [`pi5/`](pi5/) | Raspberry Pi 5 / Debian 12+ | host + remote | written, **not run on hardware** |
+| [`rasp-pi/`](rasp-pi/) | Raspberry Pi / Debian 12+ | host + remote | written, **not run on hardware** |
 | [`windows-ps/`](windows-ps/) | Windows 10/11, PowerShell | **host only** | lib + audit verified on Windows 11; installer not run |
 | [`windows-wsl/`](windows-wsl/) | Ubuntu under WSL2 | **host only** | lib + audit verified on WSL2; installer not run |
 

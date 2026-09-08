@@ -5,7 +5,7 @@
 #
 #    sudo sh tsvpn-install.sh <node.json>
 #
-#  Typical use: copy this whole scripts/pi5/ folder plus the one
+#  Typical use: copy this whole scripts/rasp-pi/ folder plus the one
 #  JSON file for this machine onto the Pi, then run it. Or let
 #  tsvpn-push.sh do both steps from your own machine.
 #
@@ -95,7 +95,7 @@ mkdir -p /etc/tsvpn
 for s in $SCRIPTS; do
 	if [ -f "$SRC/$s" ]; then cat "$SRC/$s" > "/etc/tsvpn/$s"
 	elif [ -f "/etc/tsvpn/$s" ]; then :
-	else echo "missing $s — copy the whole scripts/pi5/ folder across, not just the installer" >&2; exit 1; fi
+	else echo "missing $s — copy the whole scripts/rasp-pi/ folder across, not just the installer" >&2; exit 1; fi
 done
 [ "$NODEJSON" = "/etc/tsvpn/node.json" ] || cat "$NODEJSON" > /etc/tsvpn/node.json
 chmod +x /etc/tsvpn/*.sh

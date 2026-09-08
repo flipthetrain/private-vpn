@@ -1,15 +1,16 @@
-# scripts/windows-dos/ — native Windows
+# scripts/windows-ps/ — native Windows (PowerShell)
 
 The implementation for **Windows 10/11 running the Tailscale Windows client**.
 For other hardware see [`../README.md`](../README.md) — the design is shared,
 the scripts are not.
 
-> **"dos" means the native Windows side**, as opposed to
-> [`../windows-wsl/`](../windows-wsl/). The scripts are **PowerShell**, not
-> `.bat`: `cmd.exe` cannot parse JSON, query network adapters, or register a
-> scheduled task, so a batch implementation would be a worse tool for the same
-> job. PowerShell 5.1 ships with every supported Windows, so there is nothing
-> to install.
+> **This is the native Windows side**, as opposed to
+> [`../windows-wsl/`](../windows-wsl/), which runs inside WSL.
+>
+> The scripts are **PowerShell**, not `.bat`: `cmd.exe` cannot parse JSON,
+> query network adapters, or register a scheduled task, so a batch
+> implementation would be a worse tool for the same job. PowerShell 5.1 ships
+> with every supported Windows, so there is nothing to install.
 
 > ## ⚠️ Partly verified
 >
@@ -94,7 +95,7 @@ Copy this folder and your JSON onto the machine, open **PowerShell as
 Administrator**, and run:
 
 ```powershell
-cd C:\path\to\windows-dos
+cd C:\path\to\windows-ps
 .\tsvpn-install.ps1 -NodeJson .\my-host.json
 ```
 

@@ -36,7 +36,7 @@ function Get-TsvpnNode {
     param([string]$Path = $script:TsvpnNode)
 
     if (-not (Test-Path $Path)) {
-        Write-Error "tsvpn: no $Path - this machine has no identity. Create it (see scripts/windows-dos/README.md) or re-run tsvpn-install.ps1."
+        Write-Error "tsvpn: no $Path - this machine has no identity. Create it (see scripts/windows-ps/README.md) or re-run tsvpn-install.ps1."
         return $null
     }
     try {

@@ -53,7 +53,7 @@ travelling. For that it is fine and costs you nothing extra.
 > Tailscale inside WSL creates a second machine on your tailnet, with its own
 > `100.x` address. That is intended — the WSL instance is the host, not Windows.
 > If you would rather Windows itself were the host, use
-> [`../windows-dos/`](../windows-dos/) instead. Do not try to do both.
+> [`../windows-ps/`](../windows-ps/) instead. Do not try to do both.
 
 ## 2. Requirements
 
@@ -143,7 +143,7 @@ node and never touch this host's resolver.
 
 Alternatively — and this works on any platform — advertise your site's resolver
 as a target and point the remote's `dns_upstream` at it directly. See
-[`../windows-dos/README.md` §5](../windows-dos/README.md#5-dns--read-this-before-adding-a-remote),
+[`../windows-ps/README.md` §5](../windows-ps/README.md#5-dns--read-this-before-adding-a-remote),
 which explains that approach in full.
 
 ## 6. What the scripts configure

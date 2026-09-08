@@ -9,7 +9,7 @@ set of omnipotent scripts riddled with `if`s.
 |---|---|---|---|
 | [`glinet/`](glinet/) | GL.iNet travel routers, firmware 4.x (tested: GL-MT3000) | host + remote | **field-verified, in service** |
 | [`pi5/`](pi5/) | Raspberry Pi 5 / Debian 12+ | host + remote | written, **not run on hardware** |
-| [`windows-dos/`](windows-dos/) | Windows 10/11, PowerShell | **host only** | lib + audit verified on Windows 11; installer not run |
+| [`windows-ps/`](windows-ps/) | Windows 10/11, PowerShell | **host only** | lib + audit verified on Windows 11; installer not run |
 | [`windows-wsl/`](windows-wsl/) | Ubuntu under WSL2 | **host only** | lib + audit verified on WSL2; installer not run |
 
 Pick the folder that matches the box in front of you and read its `README.md`.

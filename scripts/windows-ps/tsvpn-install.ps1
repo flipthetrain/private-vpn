@@ -61,7 +61,7 @@ foreach ($f in 'tsvpn-lib.ps1','tsvpn-selfheal.ps1','tsvpn-audit.ps1') {
     $src = Join-Path $PSScriptRoot $f
     if (Test-Path $src) { Copy-Item $src -Destination $script:TsvpnDir -Force }
     elseif (-not (Test-Path (Join-Path $script:TsvpnDir $f))) {
-        Write-Host "missing $f  -  copy the whole scripts/windows-dos/ folder across" -ForegroundColor Red
+        Write-Host "missing $f  -  copy the whole scripts/windows-ps/ folder across" -ForegroundColor Red
         exit 1
     }
 }

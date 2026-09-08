@@ -163,18 +163,28 @@ Homebrew's `dnsmasq` also works if you would rather; the audit notices it.
 sysctl -w net.inet.ip.forwarding=1
 ```
 
-**macOS clears this on every boot**, and there is no reliable file to persist it
-in — `/etc/sysctl.conf` is not honoured on current macOS. That is precisely why
-the LaunchDaemon re-applies it rather than setting it once.
+**macOS clears this on every boot.** Whether `/etc/sysctl.conf` is honoured
+varies by version, and it is not something to rely on, so the LaunchDaemon
+re-applying it each boot is the mechanism. The line is written to
+`/etc/sysctl.conf` as well — it costs nothing, it works where it is supported,
+and it documents the intent for whoever reads the machine next.
 
-### 6.2 NAT, via pf — the part macOS needs that Linux does not
+The audit reports the **live** value, because that is the only one that
+matters.
 
-On Linux, `tailscaled` installs the SNAT for forwarded traffic itself. **On
-macOS it does not.** Without NAT, a target device replies to a `100.x` address
-it has no route to, so **subnet routes fail while the exit node looks perfectly
-healthy** — a confusing split, and one this design expects you to hit.
+### 6.2 NAT, via pf
 
-So the self-heal writes `/etc/pf.anchors/tsvpn`:
+Tailscale's automatic firewall and NAT integration is **Linux-only** —
+`tailscaled` writes netfilter rules there and has no equivalent on macOS. So do
+not assume forwarded traffic is SNATed for you here.
+
+It matters because without SNAT a target device replies to a `100.x` address it
+has no route to, so **subnet routes fail while the exit node looks perfectly
+healthy** — a confusing split, and the one this platform is most likely to hit.
+If it turns out your build does handle it, the rule below is simply redundant:
+it NATs the same traffic to the same address.
+
+The self-heal writes `/etc/pf.anchors/tsvpn`:
 
 ```
 nat on en0 inet from 100.64.0.0/10 to any -> (en0)
@@ -183,16 +193,33 @@ nat on en0 inet from 100.64.0.0/10 to any -> (en0)
 Only forwarded traffic matches: the Mac's own packets leave with the interface's
 own address, and its traffic to tailnet peers leaves on `utun`.
 
-pf only evaluates an anchor the main ruleset declares, so the self-heal also
-ensures `/etc/pf.conf` contains `nat-anchor "tsvpn"` and the matching
-`load anchor` line — **a macOS update rewrites `/etc/pf.conf` and drops them**,
-which is exactly the kind of silent regression the self-heal exists for. Your
-original is kept at `/etc/pf.conf.tsvpn-backup`, and a generated ruleset is
-never installed unless `pfctl -n` parses it first.
+#### It does not touch Apple's `/etc/pf.conf`
 
-> This is the least certain part of this platform. If the audit shows the exit
-> node working but a target unreachable **from a remote**, this is where to
-> look: `sudo pfctl -a tsvpn -s nat`.
+pf only evaluates an anchor that the loaded ruleset declares, and that
+declaration has to sit with the other translation rules — pf requires `nat`
+before `rdr` before filter rules. The obvious approach is to edit
+`/etc/pf.conf`. **This does not do that**, for two reasons: a bad edit costs you
+networking on a machine you may not be sitting at, and a macOS update rewrites
+that file, so you would be re-patching it forever.
+
+Instead the self-heal reads Apple's file, splices the anchor into a **copy** at
+`/etc/tsvpn/pf.conf`, and loads that:
+
+```sh
+sudo pfctl -f /etc/tsvpn/pf.conf
+```
+
+Apple's file is left exactly as they shipped it. Because the copy is
+regenerated from theirs on every boot, a macOS update that changes `pf.conf`
+is simply picked up rather than fought. And a generated ruleset is never loaded
+unless `pfctl -n` parses it first — if it does not parse, nothing is loaded and
+the error is printed.
+
+> pf rules are not persistent on macOS regardless, so the LaunchDaemon reloading
+> them each boot is the mechanism, exactly as with forwarding.
+
+> If the audit shows the exit node working but a target unreachable **from a
+> remote**, this is the first place to look: `sudo pfctl -a tsvpn -s nat`.
 
 ### 6.3 Advertisements
 
@@ -224,7 +251,8 @@ sudo /etc/tsvpn/tsvpn-selfheal.sh   # fixes almost everything
 | Nothing routes at all after a reboot | forwarding cleared and the daemon did not run | `sudo launchctl print system/com.tsvpn.selfheal` |
 | Advertisements empty | a bare `tailscale up`, or an app update | run the self-heal |
 | Audit says "App Store build" | wrong Tailscale variant | §2 — replace with the standalone `.pkg` |
-| pf anchor missing after a macOS update | the update rewrote `/etc/pf.conf` | run the self-heal; it re-adds the anchor |
+| pf rules gone after a reboot | pf is not persistent on macOS | check the daemon ran: `sudo launchctl print system/com.tsvpn.selfheal` |
+| pf rules gone after a macOS update | the update replaced `/etc/pf.conf`, which our copy is generated from | run the self-heal; it re-reads Apple's file and regenerates |
 | Remote's clients resolve nothing | no forwarder on this Mac | §5 |
 
 ## 8. Bring-up checklist

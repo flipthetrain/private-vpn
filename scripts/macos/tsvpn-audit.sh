@@ -68,8 +68,11 @@ echo
 echo "-- forwarding --"
 # macOS clears this on every boot, which is the whole reason for the LaunchDaemon.
 [ "$(sysctl -n net.inet.ip.forwarding 2>/dev/null)" = "1" ] \
-	&& ok "net.inet.ip.forwarding = 1" \
+	&& ok "net.inet.ip.forwarding = 1 (live value — the only one that matters)" \
 	|| no "IP forwarding is off — nothing routes through this Mac"
+grep -q '^net.inet.ip.forwarding=1' /etc/sysctl.conf 2>/dev/null \
+	&& inf "/etc/sysctl.conf also asks for it; honoured on some macOS versions, ignored on others" \
+	|| inf "persistence comes from the LaunchDaemon, which re-applies it each boot"
 
 echo
 echo "-- nat (pf) --"
@@ -78,15 +81,26 @@ echo "-- nat (pf) --"
 EGRESS=$(route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}')
 inf "egress interface: ${EGRESS:-<none>}"
 [ -f /etc/pf.anchors/tsvpn ] && ok "/etc/pf.anchors/tsvpn present" || no "pf anchor file missing"
+PFCONF="${TSVPN_DIR:-/etc/tsvpn}/pf.conf"
+if [ -f "$PFCONF" ]; then
+	ok "$PFCONF present (generated; Apple's /etc/pf.conf is not modified)"
+	grep -q '^nat-anchor "tsvpn"' "$PFCONF" && ok "it declares the tsvpn anchor" \
+		|| no "it does not declare the tsvpn anchor — pf would ignore the rule"
+	pfctl -n -f "$PFCONF" >/dev/null 2>&1 && ok "it parses" || no "it does NOT parse — run the self-heal"
+else
+	no "$PFCONF missing — run the self-heal"
+fi
 grep -q '^nat-anchor "tsvpn"' /etc/pf.conf 2>/dev/null \
-	&& ok "/etc/pf.conf declares the tsvpn anchor" \
-	|| no "/etc/pf.conf does not declare the anchor — pf will ignore it (a macOS update resets this)"
+	&& wn "Apple's /etc/pf.conf still contains a tsvpn anchor from an older version of these scripts; harmless, but you can remove that line" \
+	|| ok "Apple's /etc/pf.conf is unmodified"
 pfctl -s info 2>/dev/null | head -1 | grep -qi enabled && ok "pf is enabled" || no "pf is disabled — NAT is not being applied"
 if pfctl -a tsvpn -s nat 2>/dev/null | grep -q 'nat on'; then
-	ok "NAT rule loaded in the tsvpn anchor"
+	ok "NAT rule live in the tsvpn anchor"
 	inf "$(pfctl -a tsvpn -s nat 2>/dev/null | head -1)"
 else
-	no "no NAT rule loaded in the tsvpn anchor — run the self-heal"
+	no "no NAT rule live in the tsvpn anchor — run the self-heal"
+	inf "without it a target replies to a 100.x address it cannot route to, so"
+	inf "subnet routes fail while the exit node looks perfectly healthy"
 fi
 
 echo

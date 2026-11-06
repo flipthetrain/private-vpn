@@ -663,8 +663,8 @@ edit. Real ones are git-ignored; the examples are not.
 | `role` | both | `host` or `remote`. **Exactly one host per deployment.** |
 | `targets` | both | bare IPv4 addresses at the host site to make reachable. No `/32`, no port. Same list on every router |
 | `exit_node` | remote | the **host router's `100.x` address**. Required |
-| `collide` | remote | the remote site's LAN range, *only if* it collides with the range you route into (design §3.2). Omit otherwise |
-| `dns_upstream` | remote | optional list. **Leave it out** — DNS then resolves through the host, which is the whole point (design §3.5). Set it only if you are using the resolver-as-a-target approach below |
+| `collide` | remote | the host-site range your `targets` live in (e.g. `192.168.1.0/24`). The fix acts only while the remote site's own network uses that same range (design §3.2) and is dormant otherwise, so it is safe to set pre-emptively. Omit it if you don't want that |
+| `dns_upstream` | both | optional list. **On a remote, leave it out** — DNS then resolves through the host, which is the whole point (design §3.5). Set it only if you are using the resolver-as-a-target approach below. **On a host**, it lists extra resolvers *on the host's own site* (e.g. the ISP router) used alongside the WAN DHCP resolver — set it when that resolver is a single box such as a Pi-hole. Never a public resolver |
 
 Anything else you add (`_comment`, notes of your own) is ignored.
 

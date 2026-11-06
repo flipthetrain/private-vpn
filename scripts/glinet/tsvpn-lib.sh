@@ -24,7 +24,7 @@ tsvpn_get() {
 tsvpn_load() {
 	if [ ! -f "$TSVPN_NODE" ]; then
 		echo "tsvpn: no $TSVPN_NODE — this router has no identity." >&2
-		echo "tsvpn: create it (see scripts/node.example.json) or re-run tsvpn-install.sh." >&2
+		echo "tsvpn: create it (see networks/example-host.json or example-remote.json) or re-run tsvpn-install.sh." >&2
 		return 1
 	fi
 
@@ -48,6 +48,8 @@ tsvpn_load() {
 	# A remote node resolves through the host by default, so that a lookup made
 	# at the remote site is answered by the HOST site's resolver and egresses
 	# at the host site's IP. Only override dns_upstream if you know why.
+	# On a HOST, dns_upstream lists extra resolvers on the host's own site
+	# (e.g. the ISP router), added alongside the WAN DHCP resolver.
 	if [ "$ROLE" = "remote" ] && [ -z "$DNS_UPSTREAM" ]; then
 		DNS_UPSTREAM="$EXIT_NODE"
 	fi

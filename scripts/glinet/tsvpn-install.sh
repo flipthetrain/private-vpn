@@ -155,6 +155,9 @@ touch /etc/sysupgrade.conf
 grep -q "^/etc/tsvpn/" /etc/sysupgrade.conf || echo "/etc/tsvpn/" >> /etc/sysupgrade.conf
 # retire the older /root layout: never call a path a flash deletes
 sed -i "/root\/restore-tailscale.sh/d;/root\/fix-target-route.sh/d;/root\/clone-mac.sh/d" /etc/sysupgrade.conf 2>/dev/null || true
+# ...and the older uci config, which nothing reads any more; node.json replaced it.
+sed -i "\#^/etc/config/tsvpn\$#d" /etc/sysupgrade.conf 2>/dev/null || true
+rm -f /etc/config/tsvpn
 
 # ---------- 5. apply + verify ----------
 echo

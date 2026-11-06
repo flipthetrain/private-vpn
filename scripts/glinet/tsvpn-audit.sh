@@ -56,8 +56,24 @@ grep -q "/etc/tsvpn" /etc/sysupgrade.conf 2>/dev/null && ok "/etc/tsvpn listed i
 [ -f "$TSVPN_LOG" ] && inf "last self-heal: $(head -1 "$TSVPN_LOG" 2>/dev/null)" || wn "no $TSVPN_LOG yet (written at boot)"
 
 echo
+echo "-- clock (no RTC: TLS to the control plane fails if the clock is wrong) --"
+if [ -f /etc/config/chrony ]; then
+	[ "$(uci -q get chrony.@makestep[0].limit)" = "-1" ] && ok "chrony may step the clock at any time" || no "chrony makestep limit is not -1 — a late sync only slews, a weeks-old clock stays wrong"
+	[ "$(uci -q get chrony.tsvpn_google.nts)" = "no" ] && [ "$(uci -q get chrony.tsvpn_cf.nts)" = "no" ] \
+		&& ok "plain NTP sources by IP present (no DNS or certs needed)" || no "no plain-IP NTP source — clock recovery depends on DNS"
+	chronyc tracking 2>/dev/null | grep -q "Leap status *: Normal" && ok "clock synced ($(date))" || no "clock NOT synced ($(date)) — tailscale TLS will fail if it is far off"
+else
+	wn "no /etc/config/chrony — cannot verify time sync"
+fi
+
+echo
 echo "-- tailscale --"
 tailscale status >/dev/null 2>&1 && ok "tailscaled responding" || no "tailscaled not responding — everything below is unreliable"
+# `tailscale ip` keeps answering with the cached address while the node is
+# logged out or stuck before login (seen 2026-11: NoState for days, behind a
+# bad clock), so check the backend state itself.
+BSTATE=$(tailscale status --json 2>/dev/null | jsonfilter -e '@.BackendState' 2>/dev/null)
+[ "$BSTATE" = "Running" ] && ok "backend state Running" || no "backend state is ${BSTATE:-<unknown>}, not Running — the node is off the tailnet"
 TSIP=$(tailscale ip -4 2>/dev/null | head -1)
 [ -n "$TSIP" ] && ok "tailnet address $TSIP" || no "no tailnet address — node logged out, needs ON-SITE re-auth (first-time setup: scripts/glinet/README.md section 2)"
 PREFS=$(tailscale debug prefs 2>/dev/null)
@@ -90,7 +106,13 @@ if [ "$ROLE" = "host" ]; then
 	echo "-- host dns (section 3.5: resolves via its own network) --"
 	[ "$(uci -q get dhcp.@dnsmasq[0].localservice)" = "0" ] && ok "localservice=0 (answers tailnet peers over a /32)" || no "localservice not 0 — remote routers get NO DNS from this host"
 	grep -q "^no-resolv" "$DNSCONF" 2>/dev/null && no "no-resolv set on the host — it must use its own network's resolver" || ok "no-resolv absent (uses the WAN DHCP resolver)"
-	grep -q "^server=" "$DNSCONF" 2>/dev/null && wn "hardcoded upstream on the host: $(grep '^server=' "$DNSCONF" | tr '\n' ' ')" || ok "no hardcoded upstream"
+	SRV=$(grep "^server=" "$DNSCONF" 2>/dev/null | sed 's/^server=//' | sort | tr '\n' ' ')
+	WANT=$(for s in $DNS_UPSTREAM; do echo "$s"; done | sort | tr '\n' ' ')
+	if [ "$SRV" = "$WANT" ]; then
+		[ -n "$SRV" ] && ok "site-local fallback resolver(s) from node.json: $SRV" || ok "no hardcoded upstream"
+	else
+		wn "dnsmasq upstreams ($SRV) differ from node.json dns_upstream ($WANT)"
+	fi
 	inf "upstream: $(sed -n 's/^nameserver //p' /tmp/resolv.conf.d/resolv.conf.auto 2>/dev/null | tr '\n' ' ')"
 else
 	echo "-- remote role --"
@@ -99,6 +121,8 @@ else
 	echo "$FWD" | grep -q "lan->tailscale0" && ok "lan->tailscale0 present" || no "lan->tailscale0 missing — clients cannot reach the tunnel"
 	EID=$(echo "$PREFS" | sed -n 's/.*"ExitNodeID": "\([^"]*\)".*/\1/p')
 	[ -n "$EID" ] && ok "exit node pinned (ExitNodeID=$EID)" || no "no exit node selected — traffic would leave from THIS site"
+	[ "$(tailscale status --json 2>/dev/null | jsonfilter -e '@.ExitNodeStatus.Online' 2>/dev/null)" = "true" ] \
+		&& ok "exit node is online" || no "exit node is OFFLINE — the kill-switch blackholes every client at this site"
 	echo "$PREFS" | grep -q '"RouteAll": true' && ok "accept-routes on" || no "accept-routes off — subnet routes will not appear"
 	# One-way by design: a remote must never offer routes back to the tailnet.
 	ADV=$(echo "$PREFS" | sed -n '/"AdvertiseRoutes"/,/]/p' | grep -o '"[0-9][^"]*"' | tr -d '"' | tr '\n' ' ')

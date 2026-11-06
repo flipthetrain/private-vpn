@@ -30,6 +30,38 @@ echo "targets   : ${TARGETS:-<none>}"
 [ "$ROLE" = "remote" ] && echo "exit node : $EXIT_NODE"
 [ "$ROLE" = "remote" ] && echo "dns       : $DNS_UPSTREAM"
 
+# --- clock: must be right BEFORE tailscaled needs TLS ---
+# There is no RTC. A cold boot restores the newest mtime under /etc, which
+# can be weeks old. Tailscale then rejects the control plane's certificate
+# as "not yet valid" and the node stays logged out. GL.iNet's chrony config
+# uses only NTS sources by HOSTNAME, so it needs working DNS to fix the
+# clock -- and it may only step during its first 3 updates. Add two plain
+# NTP sources by IP (no DNS, no certificates) and allow a step at any time.
+# NTP is this box's own traffic, not a client's, so section 3.5 is untouched.
+if [ -f /etc/config/chrony ]; then
+	uci -q set chrony.@makestep[0].limit='-1'
+	for pair in tsvpn_google:216.239.35.0 tsvpn_cf:162.159.200.1; do
+		sec=${pair%%:*}
+		uci -q set chrony.$sec=server
+		uci -q set chrony.$sec.hostname="${pair#*:}"
+		uci -q set chrony.$sec.iburst='yes'
+		uci -q set chrony.$sec.nts='no'
+	done
+	uci -q commit chrony
+	/etc/init.d/chronyd restart >/dev/null 2>&1
+	# At boot GL's /etc/hotplug.d/kmwan/time_sync also restarts chronyd every
+	# ~25 s until it syncs, which can push a sync past this wait. That is
+	# fine: it keeps retrying on its own, and tailscaled retries TLS by
+	# itself once the clock is right. This wait only keeps the log honest.
+	chronyc waitsync 12 1 >/dev/null 2>&1 \
+		&& echo "clock     : synced $(date)" \
+		|| echo "clock     : not synced yet (GL time_sync keeps retrying) -- $(date)"
+	# tailscaled backs off after a TLS failure; kick it so it retries now.
+	tailscale status 2>&1 | grep -q 'not yet valid' && /etc/init.d/tailscale restart
+else
+	echo "note: no /etc/config/chrony -- clock left to the firmware"
+fi
+
 # --- wait for tailscaled (the first boot after a flash is slow) ---
 i=0
 while [ $i -lt 60 ]; do
@@ -83,8 +115,17 @@ if [ "$ROLE" = "host" ]; then
 	# and serves those answers to the tailnet. A remote site then gets exactly
 	# what a device sitting at the host site gets: same resolver, same egress, nothing
 	# for a service to correlate.
-	uci -q delete dhcp.@dnsmasq[0].server        # no hardcoded upstream
+	uci -q delete dhcp.@dnsmasq[0].server        # no hardcoded PUBLIC upstream
 	uci -q delete dhcp.@dnsmasq[0].noresolv      # use the network we are on
+	# Optional dns_upstream on a host = extra resolvers ON THIS SITE (e.g. the
+	# ISP router), used alongside the WAN DHCP one. They egress at the same
+	# public IP, so section 3.5 still holds. Needed when the DHCP resolver is
+	# a single box (a Pi-hole) that can fail: with no working resolver the
+	# clock never syncs, TLS to the control plane fails ("certificate not yet
+	# valid") and the node drops off the tailnet. Seen 2026-11-02.
+	for s in $DNS_UPSTREAM; do
+		uci -q add_list dhcp.@dnsmasq[0].server="$s"
+	done
 	# localservice=0 is REQUIRED: tailscale0 is a /32, which dnsmasq's
 	# `local-service` reads as "no local subnet", so it silently refuses
 	# queries from remote tailnet peers. The wan zone is input DROP, so this

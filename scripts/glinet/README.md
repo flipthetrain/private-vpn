@@ -64,7 +64,7 @@ stored; 5 wrong in 10 min locks login for 10 min; sessions last 30 min).
 
 - A **remote's** page shows that router only: health, audit, exit-node test,
   speed test, self-heal, restart Tailscale, reboot, settings (targets, exit node,
-  client WiFi), and a link to GL's admin UI for firmware.
+  client WiFi), and a link to that router's GL.iNet admin page.
 - The **host's** page is the dashboard: itself plus every remote, with the same
   buttons for each and links to each remote's own page. Whoever can log in to the
   host can administer the whole deployment. The host reaches remotes with its own

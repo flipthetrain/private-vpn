@@ -16,6 +16,12 @@
 #  A node that is merely logged out (NeedsLogin) is NOT "stuck":
 #  restarting cannot fix that, so it is logged and left alone.
 #
+#  Also catches DRIFT while tailscaled is healthy: a firmware update (seen
+#  2026-11-06, GL 4.11) or GL's Tailscale plugin can reset the prefs after
+#  the boot self-heal has run -- or the host was down when it ran -- leaving
+#  a remote with no exit node (its clients blackholed) or advertising its
+#  LAN. Then re-run the self-heal, at most once per 15 minutes.
+#
 #  Leaves evidence: each action appends a memory/process snapshot to
 #  /etc/tsvpn/watchdog.log (flash, so it survives the reboot; small,
 #  trimmed, written only when something is wrong).
@@ -29,8 +35,30 @@ LAST=/etc/tsvpn/watchdog.lastreboot
 [ "$(cut -d. -f1 /proc/uptime)" -lt 300 ] && exit 0
 
 S=$(timeout 20 tailscale status --json 2>/dev/null | jsonfilter -e '@.BackendState' 2>/dev/null)
+drift() {
+	. /etc/tsvpn/tsvpn-lib.sh; tsvpn_load >/dev/null 2>&1 || return 1
+	P=$(tailscale debug prefs 2>/dev/null)
+	if [ "$ROLE" = remote ]; then
+		echo "$P" | grep -q '"ExitNodeID": "[^"]' || { echo "no exit node selected"; return 0; }
+		echo "$P" | sed -n '/"AdvertiseRoutes"/,/]/p' | grep -q '"[0-9]' && { echo "advertising routes"; return 0; }
+	else
+		echo "$P" | grep -q '"0.0.0.0/0"' || { echo "exit node not advertised"; return 0; }
+		for t in $TARGETS; do echo "$P" | grep -q "\"$t/32\"" || { echo "route $t/32 not advertised"; return 0; }; done
+	fi
+	return 1
+}
+
 case "$S" in
-	Running) rm -f "$STATE"; exit 0 ;;
+	Running)
+		rm -f "$STATE"
+		WHY=$(drift) || exit 0
+		STAMP=/tmp/tsvpn-wd.heal; nowt=$(date +%s)
+		[ $((nowt - $(cat $STAMP 2>/dev/null || echo 0))) -ge 900 ] || exit 0
+		echo "$nowt" > $STAMP
+		logger -t tsvpn-wd "config drift ($WHY): re-running the self-heal"
+		echo "== $(date) config drift ($WHY): re-ran the self-heal" >> "$LOG"
+		/etc/tsvpn/tsvpn-selfheal.sh > /var/log/tsvpn-selfheal.log 2>&1
+		exit 0 ;;
 	NeedsLogin|NeedsMachineAuth)
 		logger -t tsvpn-wd "tailscale is $S: needs a person (re-auth), not a restart"
 		rm -f "$STATE"; exit 0 ;;

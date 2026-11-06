@@ -13,6 +13,42 @@ GL.iNet router, in every deployment. Nothing here knows an address, an SSID, or
 a tailnet. The only thing that makes a router a host or a remote, on your
 network or someone else's, is one small JSON file: `/etc/tsvpn/node.json`.
 
+## Turnkey: new router from the box
+
+**With Claude Code:** open it in this repo and say *"I plugged in a new GL.iNet"*.
+The repo's `tsvpn-new-router` skill (`.claude/skills/`) asks which of these you
+are doing and does everything except the steps that need a person:
+
+| You are… | You provide | Your hands-on steps |
+|---|---|---|
+| **adding a remote** to a working deployment | its name; optionally a client WiFi name + key | phone: wizard, firmware, enable WAN SSH · approve it in the Tailscale console + disable key expiry |
+| **building a new deployment** (host first) | tailnet account, host name, target device IPs, whether DNS is a single Pi-hole | the above, plus the one-time ACL `autoApprovers` paste |
+| **replacing the host** | nothing new | the above, for the new host only; every remote is re-pointed automatically |
+| **repairing / re-auditing** | which router | none |
+
+**Without Claude Code,** the same steps by hand — each is idempotent and prints
+what you must do next:
+
+```sh
+P=scripts/glinet/tsvpn-provision.sh
+$P new-remote you@example.com my-remote        # or: new-host <tailnet> <name> <target-ip>...
+# phone: join the sticker WiFi, http://192.168.8.1 — wizard (admin password,
+# timezone), System > Upgrade, Security > Remote Access Control > SSH on
+$P discover                                    # find its WAN address
+TSVPN_PASSWORD='…' $P bootstrap <wan-ip> networks/you@example.com/my-remote.json
+$P login   <wan-ip> networks/you@example.com/my-remote.json          # prints an approval URL
+$P login   <wan-ip> networks/you@example.com/my-remote.json --wait   # after approving
+$P install <wan-ip> networks/you@example.com/my-remote.json
+$P lockdown <100.x>                            # close WAN SSH again
+$P test     <100.x>                            # remote: live path + speed
+$P wifi     <100.x> my-ssid 'wifi-key'         # optional
+```
+
+A remote can be built at the host's own site and shipped: at its destination it
+only needs its **WAN** port plugged into that site's router.
+
+The rest of this section is the same job explained, done by hand.
+
 ## Quick start
 
 This is the whole job. Everything after it is detail you only need when
@@ -147,7 +183,8 @@ from your computer into one of its **LAN** ports. Then open `http://192.168.8.1`
 
 | | |
 |---|---|
-| [**Quick start**](#quick-start) | **the whole job, in three steps — start here** |
+| [**Turnkey**](#turnkey-new-router-from-the-box) | **new router from the box, mostly automated — start here** |
+| [Quick start](#quick-start) | the whole job by hand, in three steps |
 | [§1 Requirements](#1-requirements) | hardware and tools |
 | [§2 First-time setup](#2-first-time-setup) | hands-on steps, once per router — **start here for new hardware** |
 | [§3 Installing a router](#3-installing-a-router) | the one command |
@@ -665,6 +702,7 @@ edit. Real ones are git-ignored; the examples are not.
 | `exit_node` | remote | the **host router's `100.x` address**. Required |
 | `collide` | remote | the host-site range your `targets` live in (e.g. `192.168.1.0/24`). The fix acts only while the remote site's own network uses that same range (design §3.2) and is dormant otherwise, so it is safe to set pre-emptively. Omit it if you don't want that |
 | `dns_upstream` | both | optional list. **On a remote, leave it out** — DNS then resolves through the host, which is the whole point (design §3.5). Set it only if you are using the resolver-as-a-target approach below. **On a host**, it lists extra resolvers *on the host's own site* (e.g. the ISP router) used alongside the WAN DHCP resolver — set it when that resolver is a single box such as a Pi-hole. Never a public resolver |
+| `tailnet_ip` | both | this router's own `100.x`. Not read by the router; `tsvpn-provision.sh login --wait` records it so `new-remote` can derive a remote's `exit_node` from the host, and `reinstall-remotes` can reach each remote |
 
 Anything else you add (`_comment`, notes of your own) is ignored.
 
@@ -1189,6 +1227,7 @@ out from the far side of the tunnel (§7).
 
 | Script | Runs on | What it does |
 |---|---|---|
+| **`tsvpn-provision.sh`** | your machine | the turnkey path: discover, node files, bootstrap, tailnet login, install, lockdown, WiFi, test, re-point remotes |
 | **`tsvpn-push.sh`** | your machine | copies this folder + a node JSON to a router, runs the installer |
 | **`tsvpn-install.sh`** | router | installs everything, generates `rc.local`, applies and audits |
 | **`tsvpn-selfheal.sh`** | router | rebuilds the whole configuration (§5). Runs at every boot |
@@ -1197,6 +1236,7 @@ out from the far side of the tunnel (§7).
 | **`tsvpn-fix-route.sh`** | router | subnet-collision fix (design §3.2). Self-disabling |
 | **`tsvpn-clone-mac.sh`** | router | captive-portal MAC cloning (§6) |
 | **`tsvpn-persist.sh`** | router | writes a hand-edited `node.json` back into the `rc.local` payload |
+| **`tsvpn-test-exit.sh`** | router (remote) | read-only live test: direct vs relayed path, latency, egress, DNS, targets, speed |
 
 ### Day to day
 

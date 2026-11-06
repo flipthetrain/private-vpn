@@ -59,7 +59,19 @@ if [ -f /etc/config/chrony ]; then
 	# tailscaled backs off after a TLS failure; kick it so it retries now.
 	tailscale status 2>&1 | grep -q 'not yet valid' && /etc/init.d/tailscale restart
 else
-	echo "note: no /etc/config/chrony -- clock left to the firmware"
+	# Older GL firmware (4.8.x) has no chrony: busybox ntpd via sysntpd, fed
+	# from system.ntp.server -- pool HOSTNAMES, so the same DNS dependency.
+	# Add the same two IP sources. busybox ntpd steps a large offset on its
+	# own, so there is no makestep equivalent to set. (A GFiber DHCP lease
+	# may also hand it Google's IPs, but that is site-specific; don't rely on it.)
+	for ip in 216.239.35.0 162.159.200.1; do
+		uci -q get system.ntp.server | tr ' ' '\n' | grep -qx "$ip" || uci -q add_list system.ntp.server="$ip"
+	done
+	uci -q set system.ntp.enabled='1'
+	uci -q commit system
+	/etc/init.d/sysntpd restart >/dev/null 2>&1
+	echo "clock     : no chrony; sysntpd given plain-IP NTP sources -- $(date)"
+	tailscale status 2>&1 | grep -q 'not yet valid' && /etc/init.d/tailscale restart
 fi
 
 # --- wait for tailscaled (the first boot after a flash is slow) ---

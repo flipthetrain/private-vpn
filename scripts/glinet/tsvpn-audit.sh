@@ -63,7 +63,14 @@ if [ -f /etc/config/chrony ]; then
 		&& ok "plain NTP sources by IP present (no DNS or certs needed)" || no "no plain-IP NTP source — clock recovery depends on DNS"
 	chronyc tracking 2>/dev/null | grep -q "Leap status *: Normal" && ok "clock synced ($(date))" || no "clock NOT synced ($(date)) — tailscale TLS will fail if it is far off"
 else
-	wn "no /etc/config/chrony — cannot verify time sync"
+	# Older firmware: busybox ntpd (sysntpd). It has no status query, so check
+	# the config and that the daemon is running with the IP sources.
+	NTPS=$(uci -q get system.ntp.server)
+	echo " $NTPS " | grep -q " 216.239.35.0 " && echo " $NTPS " | grep -q " 162.159.200.1 " \
+		&& ok "plain NTP sources by IP present in system.ntp (no chrony on this firmware)" \
+		|| no "no plain-IP NTP source in system.ntp — clock recovery depends on DNS"
+	pgrep -f "ntpd.*-p 216.239.35.0" >/dev/null && ok "sysntpd running with the IP sources ($(date))" \
+		|| no "sysntpd not running with the IP sources — clock can drift or stay wrong after a cold boot"
 fi
 
 echo
@@ -89,6 +96,13 @@ while [ $i -lt 20 ]; do
 	FWD="$FWD $(uci -q get firewall.@forwarding[$i].src)->$d"; i=$((i+1))
 done
 inf "forwardings:$FWD"
+OPEN=""
+for r in $(uci show firewall | sed -n "s/^firewall\.\([^.=]*\)=rule$/\1/p"); do
+	[ "$(uci -q get firewall.$r.src)" = wan ] && [ "$(uci -q get firewall.$r.target)" = ACCEPT ] || continue
+	case " $(uci -q get firewall.$r.dest_port) " in *" 22 "*|*" 80 "*|*" 443 "*) OPEN="$OPEN $r" ;; esac
+done
+[ -z "$OPEN" ] && ok "no admin port open on WAN (admin only via the tunnel)" \
+	|| wn "admin port open on WAN:$OPEN — left from provisioning? tsvpn-provision.sh lockdown <100.x>"
 
 echo
 if [ "$ROLE" = "host" ]; then
@@ -100,6 +114,13 @@ if [ "$ROLE" = "host" ]; then
 	echo "$PREFS" | grep -q '"0.0.0.0/0"' && ok "advertising exit node 0.0.0.0/0" || no "NOT advertising the exit node"
 	for t in $TARGETS; do
 		echo "$PREFS" | grep -q "\"$t/32\"" && ok "advertising route $t/32" || no "NOT advertising $t/32"
+	done
+	# Advertised is not approved: without an ACL autoApprover the console must
+	# approve each one, and nothing errors if nobody does.
+	ALLOWED=" $(tailscale status --json 2>/dev/null | jsonfilter -e '@.Self.AllowedIPs[*]' | tr '\n' ' ') "
+	case "$ALLOWED" in *" 0.0.0.0/0 "*) ok "exit node APPROVED in the console" ;; *) no "exit node advertised but NOT approved — console: Edit route settings, or add autoApprovers.exitNode" ;; esac
+	for t in $TARGETS; do
+		case "$ALLOWED" in *" $t/32 "*) ok "route $t/32 APPROVED" ;; *) no "route $t/32 NOT approved — console, or autoApprovers.routes" ;; esac
 	done
 	echo "$PREFS" | grep -qE '"192\.168\.[0-9]+\.0/24"|"10\.[0-9]+\.[0-9]+\.0/24"' && wn "a whole /24 is advertised — section 3.1 wants /32 per device" || ok "no whole-LAN route advertised (3.1)"
 	echo

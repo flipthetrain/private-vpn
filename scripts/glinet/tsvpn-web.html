@@ -102,7 +102,6 @@ function card(s, remote) {
       <button data-a="cfg" data-t="${t}">Settings…</button>
       <button class="danger" data-a="restart-tailscale" data-t="${t}" data-warn="Drops this router off the tailnet for ~15 s.">Restart Tailscale</button>
       <button class="danger" data-a="reboot" data-t="${t}" data-warn="Reboots ${esc(s.node)}. Its site has no internet for ~2 min.">Reboot</button>
-      ${remote ? `<a class="btn" href="http://${esc(s.tailnet_ip)}:8099/" target="_blank" rel="noopener">Its own page ↗</a>` : ""}
       <a class="btn" href="http://${esc(s.tailnet_ip)}/" target="_blank" rel="noopener">GL.iNet admin page ↗</a>
     </div>
     <div class="cfg" id="cfg-${id}"></div>

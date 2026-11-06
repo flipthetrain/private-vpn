@@ -223,7 +223,10 @@ else
 	[ "$HOP" = "$EXIT_NODE" ] && ok "first hop is the exit node ($HOP)" || no "first hop is ${HOP:-<none>}, expected $EXIT_NODE"
 	R=$(ip route get 8.8.8.8 2>/dev/null | head -1)
 	case "$R" in *"dev tailscale0"*) ok "default traffic uses tailscale0" ;; *) no "default traffic is NOT tunnelled: $R" ;; esac
-	EGRESS=$(wget -qO- --timeout=10 https://ifconfig.me/ip 2>/dev/null)
+	# resolve via dnsmasq (as clients do): GL points the router's own
+	# resolv.conf at the site resolver, which may be broken
+	EGIP=$(nslookup ifconfig.me 127.0.0.1 2>/dev/null | sed -n 's/^Address [0-9]*: \([0-9.]*\)$/\1/p' | head -1)
+	EGRESS=$(curl -s ${EGIP:+--resolve ifconfig.me:443:$EGIP} --max-time 10 https://ifconfig.me/ip 2>/dev/null)
 	[ -n "$EGRESS" ] && inf "egress IP: $EGRESS  <- must be the HOST site's public IP, not this site's" || wn "could not determine the egress IP"
 	# A LAN client is masqueraded; this router itself is not. Test that path too,
 	# because masq problems are invisible from the router's own traffic.

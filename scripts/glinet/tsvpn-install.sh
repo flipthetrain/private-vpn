@@ -30,7 +30,7 @@ set -e
 
 SRC=$(cd "$(dirname "$0")" && pwd)
 NODEJSON=$1
-SCRIPTS="tsvpn-lib.sh tsvpn-selfheal.sh tsvpn-audit.sh tsvpn-fix-route.sh tsvpn-clone-mac.sh tsvpn-persist.sh tsvpn-test-exit.sh tsvpn-speedtest.sh tsvpn-watchdog.sh"
+SCRIPTS="tsvpn-lib.sh tsvpn-selfheal.sh tsvpn-audit.sh tsvpn-fix-route.sh tsvpn-clone-mac.sh tsvpn-persist.sh tsvpn-test-exit.sh tsvpn-speedtest.sh tsvpn-watchdog.sh tsvpn-api.sh tsvpn-web.sh tsvpn-web-cgi.sh tsvpn-web.html"
 
 if [ -z "$NODEJSON" ]; then
 	if [ -f /etc/tsvpn/node.json ]; then

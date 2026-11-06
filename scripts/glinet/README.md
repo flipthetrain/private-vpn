@@ -53,6 +53,24 @@ streams. All remotes share the host's one CPU, so together they cannot take more
 than that from the host site's line. `speed` saturates lines for about a minute
 per remote: run it when nobody is watching.
 
+### Admin page
+
+Every router serves **`http://<its-100.x>:8099/`** (or `http://<name>:8099/` with
+MagicDNS). Two gates: the browser must be on a **machine on the tailnet** (the
+page listens only on the tailnet address, and each router refuses to forward its
+own LAN devices to any 100.x, so a TV at a remote site cannot reach it), and you
+log in with **that router's GL.iNet admin password** (checked by rpcd, never
+stored; 5 wrong in 10 min locks login for 10 min; sessions last 30 min).
+
+- A **remote's** page shows that router only: health, audit, exit-node test,
+  speed test, self-heal, restart Tailscale, reboot, settings (targets, exit node,
+  client WiFi), and a link to GL's admin UI for firmware.
+- The **host's** page is the dashboard: itself plus every remote, with the same
+  buttons for each and links to each remote's own page. Whoever can log in to the
+  host can administer the whole deployment. The host reaches remotes with its own
+  key, which each remote fetches at boot and pins to `tsvpn-api.sh` (a fixed menu
+  of actions, never a shell).
+
 A remote can be built at the host's own site and shipped: at its destination it
 only needs its **WAN** port plugged into that site's router.
 
@@ -1247,6 +1265,8 @@ out from the far side of the tunnel (§7).
 | **`tsvpn-persist.sh`** | router | writes a hand-edited `node.json` back into the `rc.local` payload |
 | **`tsvpn-test-exit.sh`** | router (remote) | read-only live test: direct vs relayed path, latency, egress, DNS, targets, speed |
 | **`tsvpn-speedtest.sh`** | router | throughput pieces (site internet direct, tunnel via iperf3, via exit node) with router CPU load; driven by `tsvpn-provision.sh speed` |
+| **`tsvpn-api.sh`** | router | the fixed menu of admin actions behind the page and the host's key |
+| **`tsvpn-web.sh`**, **`tsvpn-web-cgi.sh`**, **`tsvpn-web.html`** | router | the admin page: uhttpd on the tailnet address, login/session/lockout, single-file UI |
 | **`tsvpn-watchdog.sh`** | router (cron, 3 min) | restarts a hung `tailscaled`, reboots as a last resort (max once per 6 h); snapshots to `/etc/tsvpn/watchdog.log` |
 
 ### Day to day

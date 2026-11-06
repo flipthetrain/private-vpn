@@ -59,6 +59,24 @@ grep -q "/etc/tsvpn" /etc/sysupgrade.conf 2>/dev/null && ok "/etc/tsvpn listed i
 [ -f "$TSVPN_LOG" ] && inf "last self-heal: $(head -1 "$TSVPN_LOG" 2>/dev/null)" || wn "no $TSVPN_LOG yet (written at boot)"
 
 echo
+echo "-- admin page (tailnet + admin password) --"
+TIP=$(tailscale ip -4 2>/dev/null | head -1)
+LIS=$(netstat -lnt 2>/dev/null | awk '$4 ~ /:8099$/ {print $4}' | tr '\n' ' ')
+case "$LIS" in
+	"$TIP:8099 ") ok "admin page on $TIP:8099 only (tailnet address)" ;;
+	"") no "admin page not listening — /etc/init.d/tsvpn-web restart" ;;
+	*) no "admin page listening on: $LIS — must be the tailnet address only" ;;
+esac
+[ "$(uci -q get firewall.tsvpn_lan_no_tailnet.target)" = REJECT ] && ok "LAN devices cannot reach tailnet addresses (only tailnet machines can)" \
+	|| no "LAN devices can reach 100.x — remote-site devices could reach admin logins"
+if [ "$ROLE" = host ]; then
+	[ -s /etc/dropbear/tsvpn_host_ed25519.pub ] && ok "dashboard key present" || no "no dashboard key (/etc/dropbear/tsvpn_host_ed25519)"
+else
+	grep -q 'command="/etc/tsvpn/tsvpn-api.sh".* tsvpn-host$' /etc/dropbear/authorized_keys 2>/dev/null \
+		&& ok "host dashboard key installed, restricted to tsvpn-api.sh" || wn "host dashboard key not installed — the host's dashboard cannot reach this router"
+fi
+
+echo
 echo "-- clock (no RTC: TLS to the control plane fails if the clock is wrong) --"
 if [ -f /etc/config/chrony ]; then
 	[ "$(uci -q get chrony.@makestep[0].limit)" = "-1" ] && ok "chrony may step the clock at any time" || no "chrony makestep limit is not -1 — a late sync only slews, a weeks-old clock stays wrong"

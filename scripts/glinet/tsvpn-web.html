@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Private VPN router</title>
+<style>
+:root { --bg:#f6f7f9; --card:#fff; --ink:#1c2128; --mute:#5f6b7a; --line:#dde2e8;
+        --ok:#1a7f37; --bad:#c62828; --warn:#a15c00; --acc:#2557d6; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#111418; --card:#1a1f26; --ink:#e6e9ed; --mute:#98a2ae; --line:#2b323c;
+          --ok:#4cc26b; --bad:#ff6b6b; --warn:#e3a33b; --acc:#7aa2ff; }
+}
+* { box-sizing:border-box }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif }
+header { display:flex; align-items:center; gap:12px; padding:14px 16px; border-bottom:1px solid var(--line); background:var(--card) }
+header h1 { font-size:17px; margin:0; flex:1 }
+main { max-width:980px; margin:0 auto; padding:16px }
+h2 { font-size:14px; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); margin:22px 0 8px }
+.card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:12px }
+.top { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 14px }
+.name { font-weight:650; font-size:16px }
+.mute { color:var(--mute); font-size:13px }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:6px 14px; margin:10px 0 }
+.k { color:var(--mute); font-size:12px } .v { font-variant-numeric:tabular-nums }
+.ok { color:var(--ok) } .bad { color:var(--bad) } .warn { color:var(--warn) }
+.btns { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px }
+button, .btn { font:inherit; font-size:13px; padding:6px 11px; border-radius:7px; border:1px solid var(--line);
+  background:var(--bg); color:var(--ink); cursor:pointer; text-decoration:none }
+button:hover, .btn:hover { border-color:var(--acc) }
+button.danger { color:var(--bad) }
+button:disabled { opacity:.5; cursor:wait }
+pre { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; overflow:auto;
+  max-height:420px; font-size:12.5px; white-space:pre-wrap; margin:10px 0 0 }
+form.login { max-width:340px; margin:12vh auto; }
+input { font:inherit; width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--ink) }
+label { display:block; font-size:12px; color:var(--mute); margin:10px 0 3px }
+.cfg { display:none; margin-top:10px } .cfg.open { display:block }
+.row2 { display:grid; grid-template-columns:1fr 1fr; gap:0 12px }
+@media (max-width:560px) { .row2 { grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<header><h1 id="title">Private VPN router</h1><button id="logout" hidden>Log out</button></header>
+<main id="app"></main>
+<script>
+"use strict";
+const app = document.getElementById("app");
+const H = { "Content-Type": "application/json" };
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const api = (a, {t, m, method="GET", body} = {}) => {
+  const q = new URLSearchParams({a}); if (t) q.set("t", t); if (m) q.set("m", m);
+  return fetch("/cgi-bin/tsvpn?" + q, {method, headers:H, body: method === "POST" ? (body || "{}") : undefined, credentials:"same-origin"});
+};
+
+function loginView(msg) {
+  document.getElementById("logout").hidden = true;
+  app.innerHTML = `<form class="login card" id="lf">
+    <div class="name">Log in</div>
+    <div class="mute">Use this router's admin password (the GL.iNet admin password).</div>
+    <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" autofocus>
+    <div class="btns"><button>Log in</button></div>
+    <div class="bad" style="margin-top:8px">${esc(msg || "")}</div></form>`;
+  document.getElementById("lf").onsubmit = async e => {
+    e.preventDefault();
+    const r = await fetch("/cgi-bin/tsvpn?a=login", {method:"POST", headers:H,
+      body: JSON.stringify({password: document.getElementById("pw").value})});
+    r.ok ? load() : loginView(await r.text());
+  };
+}
+
+const fmtUp = s => s > 86400 ? `${Math.floor(s/86400)} d ${Math.floor(s%86400/3600)} h` : `${Math.floor(s/3600)} h ${Math.floor(s%3600/60)} min`;
+
+function card(s, remote) {
+  const id = "c" + s.tailnet_ip.replace(/\./g, "_");
+  const okRun = s.backend === "Running";
+  const exitTxt = s.role === "remote"
+    ? `<div><div class="k">Exit node</div><div class="v ${s.exit_online === "true" ? "ok" : "bad"}">${esc(s.exit_node)} ${s.exit_online === "true" ? "online" : "OFFLINE"}</div></div>` : "";
+  const t = remote ? s.tailnet_ip : "";
+  return `<div class="card" id="${id}">
+    <div class="top"><span class="name">${esc(s.node)}</span>
+      <span class="mute">${esc(s.role)} · ${esc(s.tailnet_ip)} · ${esc(s.model)}</span></div>
+    <div class="grid">
+      <div><div class="k">Tailscale</div><div class="v ${okRun ? "ok" : "bad"}">${esc(s.backend)}</div></div>
+      ${exitTxt}
+      <div><div class="k">Clock</div><div class="v ${s.clock === "unsynced" ? "warn" : "ok"}">${esc(s.clock)}</div></div>
+      <div><div class="k">Memory free</div><div class="v ${s.mem_avail_mb < 60 ? "bad" : ""}">${s.mem_avail_mb} MB</div></div>
+      <div><div class="k">tailscaled</div><div class="v">${s.tailscaled_mb} MB</div></div>
+      <div><div class="k">Up</div><div class="v">${fmtUp(s.uptime_s)}</div></div>
+      <div><div class="k">Load</div><div class="v">${esc(s.load)}</div></div>
+      <div><div class="k">Firmware</div><div class="v">${esc(s.firmware)} · TS ${esc(s.tailscale)}</div></div>
+      <div><div class="k">Watchdog</div><div class="v ${s.watchdog_events > 0 ? "warn" : ""}">${s.watchdog_events} event(s)</div></div>
+      <div><div class="k">Client WiFi</div><div class="v">${esc(s.wifi_ssid || "–")}</div></div>
+      <div><div class="k">Targets</div><div class="v">${esc(s.targets)}</div></div>
+    </div>
+    <div class="mute">Last self-heal: ${esc(s.last_selfheal || "–")} · ${esc(s.time)}</div>
+    <div class="btns">
+      <button data-a="audit" data-t="${t}">Audit</button>
+      ${s.role === "remote" ? `<button data-a="test" data-t="${t}">Exit-node test</button>` : ""}
+      <button data-a="speed" data-t="${t}" data-warn="Saturates the line for ~30 s; video will stutter.">Speed test</button>
+      <button data-a="selfheal" data-t="${t}">Re-run self-heal</button>
+      <button data-a="cfg" data-t="${t}">Settings…</button>
+      <button class="danger" data-a="restart-tailscale" data-t="${t}" data-warn="Drops this router off the tailnet for ~15 s.">Restart Tailscale</button>
+      <button class="danger" data-a="reboot" data-t="${t}" data-warn="Reboots ${esc(s.node)}. Its site has no internet for ~2 min.">Reboot</button>
+      ${remote ? `<a class="btn" href="http://${esc(s.tailnet_ip)}:8099/" target="_blank" rel="noopener">Its own page ↗</a>` : ""}
+      <a class="btn" href="http://${esc(s.tailnet_ip)}/" target="_blank" rel="noopener" title="GL.iNet admin: System → Upgrade for firmware">GL admin / firmware ↗</a>
+    </div>
+    <div class="cfg" id="cfg-${id}"></div>
+    <pre hidden id="out-${id}"></pre>
+  </div>`;
+}
+
+async function cfgForm(id, t) {
+  const box = document.getElementById("cfg-" + id);
+  if (box.classList.toggle("open") === false) return;
+  const r = await api("config-get", {t}); const c = await r.json(); const n = c.node;
+  box.innerHTML = `<div class="row2">
+    <div><label>Targets (IPs at the host site, comma-separated)</label><input name="targets" value="${esc((n.targets||[]).join(", "))}"></div>
+    ${n.role === "remote" ? `<div><label>Exit node (host's 100.x)</label><input name="exit_node" value="${esc(n.exit_node||"")}"></div>` : `<div><label>DNS fallback on the host's site (comma-separated)</label><input name="dns_upstream" value="${esc((n.dns_upstream||[]).join(", "))}"></div>`}
+    ${n.role === "remote" ? `<div><label>Collide (host-site range, e.g. 192.168.1.0/24)</label><input name="collide" value="${esc(n.collide||"")}"></div>` : ""}
+    <div><label>Client WiFi name (blank = unchanged)</label><input name="wifi_ssid" placeholder="${esc(c.wifi_ssid)}"></div>
+    <div><label>Client WiFi password (8+ chars)</label><input name="wifi_key" type="password" autocomplete="new-password"></div>
+    </div><div class="btns"><button data-save="${id}" data-t="${t}">Save and apply</button></div>`;
+}
+
+async function act(btn) {
+  const a = btn.dataset.a, t = btn.dataset.t;
+  const id = btn.closest(".card").id;
+  if (a === "cfg") return cfgForm(id, t);
+  if (btn.dataset.warn && !confirm(btn.dataset.warn + "\n\nContinue?")) return;
+  const out = document.getElementById("out-" + id);
+  out.hidden = false; out.textContent = `${btn.textContent}: running…`; btn.disabled = true;
+  try {
+    const r = await api(a, {t, method: a === "audit" ? "GET" : "POST"});
+    if (r.status === 401) return loginView("Session expired; log in again.");
+    out.textContent = await r.text();
+  } catch (e) { out.textContent = "No answer (expected for reboot / Tailscale restart)."; }
+  btn.disabled = false;
+}
+
+async function save(btn) {
+  const id = btn.dataset.save, t = btn.dataset.t, box = document.getElementById("cfg-" + id);
+  const v = n => (box.querySelector(`[name=${n}]`)?.value || "").trim();
+  const list = n => v(n).split(/[\s,]+/).filter(Boolean);
+  const body = {targets: list("targets")};
+  if (v("exit_node")) body.exit_node = v("exit_node");
+  if (v("collide")) body.collide = v("collide");
+  if (box.querySelector("[name=dns_upstream]")) body.dns_upstream = list("dns_upstream");
+  if (v("wifi_ssid")) { body.wifi_ssid = v("wifi_ssid"); body.wifi_key = v("wifi_key"); }
+  if (!confirm("Apply these settings now? The router re-runs its self-heal" +
+      (body.wifi_ssid ? " and its client WiFi changes: devices must rejoin." : "."))) return;
+  const out = document.getElementById("out-" + id);
+  out.hidden = false; out.textContent = "saving…";
+  const r = await api("config-set", {t, method:"POST", body: JSON.stringify(body)});
+  out.textContent = await r.text();
+}
+
+app.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.save) return save(b);
+  if (b.dataset.a) act(b);
+});
+document.getElementById("logout").onclick = async () => { await api("logout", {method:"POST"}); loginView(); };
+
+async function load() {
+  const r = await api("status");
+  if (r.status === 401) return loginView();
+  if (!r.ok) { app.innerHTML = `<div class="card bad">${esc(await r.text())}</div>`; return; }
+  const s = await r.json();
+  document.getElementById("logout").hidden = false;
+  document.getElementById("title").textContent = `${s.node} · ${s.deployment}`;
+  document.title = s.node;
+  app.innerHTML = `<h2>${s.role === "host" ? "Host (exit node)" : "This router"}</h2>${card(s, false)}`;
+  if (s.role === "host") {
+    app.insertAdjacentHTML("beforeend", `<h2>Remotes</h2><div id="peers" class="mute">Asking each remote…</div>`);
+    const pr = await api("peers"); const peers = pr.ok ? await pr.json() : [];
+    const box = document.getElementById("peers"); box.className = "";
+    box.innerHTML = peers.length ? peers.sort((a,b) => a.node.localeCompare(b.node)).map(p => card(p, true)).join("")
+      : `<div class="card mute">No remotes answered. A remote appears here after its self-heal has fetched this host's key (it runs at every boot, or re-run its install).</div>`;
+  }
+}
+load();
+</script>
+</body>
+</html>

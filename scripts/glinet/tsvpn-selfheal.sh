@@ -153,17 +153,14 @@ if [ "$ROLE" = "host" ]; then
 	# for a service to correlate.
 	uci -q delete dhcp.@dnsmasq[0].server        # no hardcoded PUBLIC upstream
 	uci -q delete dhcp.@dnsmasq[0].noresolv      # use the network we are on
-	# Optional dns_upstream on a host = the resolver(s) ON THIS SITE to use
-	# INSTEAD of the WAN DHCP one (e.g. the ISP router). Same site, same public
-	# IP, so section 3.5 still holds. Set it when the DHCP resolver is a single
-	# box (a Pi-hole) that can fail: with no working resolver the clock never
-	# syncs, TLS to the control plane fails ("certificate not yet valid") and
-	# the node drops off the tailnet (2026-11-02). It REPLACES the DHCP one
-	# (noresolv): a resolver that answers REFUSED is not skipped by dnsmasq,
-	# so keeping a broken Pi-hole in the list still breaks lookups (2026-11-06).
+	# Optional dns_upstream on a host = extra resolvers ON THIS SITE (e.g. the
+	# ISP router), used alongside the WAN DHCP one. They egress at the same
+	# public IP, so section 3.5 still holds. Needed when the DHCP resolver is
+	# a single box (a Pi-hole) that can fail: with no working resolver the
+	# clock never syncs, TLS to the control plane fails ("certificate not yet
+	# valid") and the node drops off the tailnet. Seen 2026-11-02.
 	for s in $DNS_UPSTREAM; do
 		uci -q add_list dhcp.@dnsmasq[0].server="$s"
-		uci -q set dhcp.@dnsmasq[0].noresolv='1'
 	done
 	# localservice=0 is REQUIRED: tailscale0 is a /32, which dnsmasq's
 	# `local-service` reads as "no local subnet", so it silently refuses

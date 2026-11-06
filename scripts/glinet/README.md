@@ -42,7 +42,16 @@ $P install <wan-ip> networks/you@example.com/my-remote.json
 $P lockdown <100.x>                            # close WAN SSH again
 $P test     <100.x>                            # remote: live path + speed
 $P wifi     <100.x> my-ssid 'wifi-key'         # optional
+$P speed    you@example.com [my-remote]        # throughput report + bottleneck
 ```
+
+**Throughput, measured on GL-MT3000s (2026-11):** the tunnel, not anyone's
+internet line, is the limit — WireGuard runs on the router CPU. About 160 Mbit/s
+each way per remote with tailscaled memory-capped (the default; ~240 uncapped,
+but a host then ran out of memory under load). That is ~6 simultaneous 4K
+streams. All remotes share the host's one CPU, so together they cannot take more
+than that from the host site's line. `speed` saturates lines for about a minute
+per remote: run it when nobody is watching.
 
 A remote can be built at the host's own site and shipped: at its destination it
 only needs its **WAN** port plugged into that site's router.
@@ -1237,6 +1246,8 @@ out from the far side of the tunnel (§7).
 | **`tsvpn-clone-mac.sh`** | router | captive-portal MAC cloning (§6) |
 | **`tsvpn-persist.sh`** | router | writes a hand-edited `node.json` back into the `rc.local` payload |
 | **`tsvpn-test-exit.sh`** | router (remote) | read-only live test: direct vs relayed path, latency, egress, DNS, targets, speed |
+| **`tsvpn-speedtest.sh`** | router | throughput pieces (site internet direct, tunnel via iperf3, via exit node) with router CPU load; driven by `tsvpn-provision.sh speed` |
+| **`tsvpn-watchdog.sh`** | router (cron, 3 min) | restarts a hung `tailscaled`, reboots as a last resort (max once per 6 h); snapshots to `/etc/tsvpn/watchdog.log` |
 
 ### Day to day
 

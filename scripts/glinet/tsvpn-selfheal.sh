@@ -47,8 +47,12 @@ if [ -f /etc/config/chrony ]; then
 		uci -q set chrony.$sec.iburst='yes'
 		uci -q set chrony.$sec.nts='no'
 	done
-	uci -q commit chrony
-	/etc/init.d/chronyd restart >/dev/null 2>&1
+	# Restart only on a real change: a restart throws away chrony's sync and
+	# it then takes minutes (NTS re-keying) to call the clock synced again.
+	if [ -n "$(uci -q changes chrony)" ]; then
+		uci -q commit chrony
+		/etc/init.d/chronyd restart >/dev/null 2>&1
+	fi
 	# At boot GL's /etc/hotplug.d/kmwan/time_sync also restarts chronyd every
 	# ~25 s until it syncs, which can push a sync past this wait. That is
 	# fine: it keeps retrying on its own, and tailscaled retries TLS by
@@ -68,10 +72,30 @@ else
 		uci -q get system.ntp.server | tr ' ' '\n' | grep -qx "$ip" || uci -q add_list system.ntp.server="$ip"
 	done
 	uci -q set system.ntp.enabled='1'
-	uci -q commit system
-	/etc/init.d/sysntpd restart >/dev/null 2>&1
+	if [ -n "$(uci -q changes system)" ]; then
+		uci -q commit system
+		/etc/init.d/sysntpd restart >/dev/null 2>&1
+	fi
 	echo "clock     : no chrony; sysntpd given plain-IP NTP sources -- $(date)"
 	tailscale status 2>&1 | grep -q 'not yet valid' && /etc/init.d/tailscale restart
+fi
+
+# --- cap tailscaled's memory (512 MB routers, no swap) ---
+# tailscaled is Go and keeps freed memory after a burst of traffic: on
+# 2026-11-06 a host grew 78 -> 212 MB in minutes of streaming-level load,
+# ran the box out of memory, and every remote lost the internet. GOMEMLIMIT
+# is a soft cap that makes Go collect and return memory before that. GL's
+# init script is replaced by firmware updates, so re-apply it every boot.
+TSMEM=${TSVPN_GOMEMLIMIT:-128MiB}
+if [ -f /etc/init.d/tailscale ] && ! grep -q "GOMEMLIMIT=$TSMEM" /etc/init.d/tailscale; then
+	if grep -q 'procd_set_param env ' /etc/init.d/tailscale; then
+		sed -i "s/ GOMEMLIMIT=[^ ]*//; s/procd_set_param env /procd_set_param env GOMEMLIMIT=$TSMEM /" /etc/init.d/tailscale
+	else
+		sed -i "s|procd_set_param command /usr/sbin/tailscaled|&\n  procd_set_param env GOMEMLIMIT=$TSMEM|" /etc/init.d/tailscale
+	fi
+	echo "memory    : tailscaled capped with GOMEMLIMIT=$TSMEM; restarting it"
+	/etc/init.d/tailscale restart
+	sleep 5
 fi
 
 # --- wait for tailscaled (the first boot after a flash is slow) ---
@@ -217,6 +241,14 @@ HOTPLUG
 	/etc/init.d/cron enable >/dev/null 2>&1
 	/etc/init.d/cron restart >/dev/null 2>&1
 fi
+
+# --- watchdog (both roles): restart a hung tailscaled, reboot as a last resort ---
+# A host whose tailscaled hangs takes every remote's internet with it, and
+# procd does not notice a process that is alive but unresponsive.
+grep -q tsvpn-watchdog /etc/crontabs/root 2>/dev/null || \
+	echo '*/3 * * * * /etc/tsvpn/tsvpn-watchdog.sh' >> /etc/crontabs/root
+/etc/init.d/cron enable >/dev/null 2>&1
+/etc/init.d/cron restart >/dev/null 2>&1
 
 # --- the bit firmware updates always clobber: control-plane prefs ---
 # GL.iNet's Tailscale plugin re-derives --advertise-routes from its own UI

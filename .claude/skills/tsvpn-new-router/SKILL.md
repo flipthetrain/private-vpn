@@ -127,6 +127,9 @@ $P audit    <100.x>
 $P test     <100.x>                                   # remote only: live path + speed
 ```
 
+Optional: `$P speed <tailnet> <name>` for a throughput report naming the
+bottleneck. It saturates the lines for ~1 minute: ask first if the site is in use.
+
 `install` must pass with 0 failed. Expected warnings: "no self-heal log yet"
 (until first boot); on a remote prepared at the host's own site, "collision is
 ACTIVE" (dormant once at its real site, unless that site uses the same range).

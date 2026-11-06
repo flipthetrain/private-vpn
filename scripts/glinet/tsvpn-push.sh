@@ -23,7 +23,7 @@ ROUTER=$1
 NODEJSON=$2
 SSH=${TSVPN_SSH:-ssh}
 HERE=$(cd "$(dirname "$0")" && pwd)
-SCRIPTS="tsvpn-lib.sh tsvpn-selfheal.sh tsvpn-audit.sh tsvpn-fix-route.sh tsvpn-clone-mac.sh tsvpn-persist.sh tsvpn-test-exit.sh tsvpn-install.sh"
+SCRIPTS="tsvpn-lib.sh tsvpn-selfheal.sh tsvpn-audit.sh tsvpn-fix-route.sh tsvpn-clone-mac.sh tsvpn-persist.sh tsvpn-test-exit.sh tsvpn-speedtest.sh tsvpn-watchdog.sh tsvpn-install.sh"
 STAGE=/tmp/tsvpn-install
 
 if [ -z "$ROUTER" ] || [ -z "$NODEJSON" ]; then

@@ -52,6 +52,9 @@ if grep -q "__TSVPN_NODE__" /etc/rc.local 2>/dev/null; then
 else
 	no "rc.local carries no node.json payload — a flash that wipes /etc/tsvpn is unrecoverable remotely"
 fi
+[ -x /etc/tsvpn/tsvpn-watchdog.sh ] && grep -q tsvpn-watchdog /etc/crontabs/root 2>/dev/null \
+	&& ok "tailscale watchdog armed (cron, every 3 min)" || no "tailscale watchdog NOT armed — a hung tailscaled needs someone to pull the power"
+[ -s /etc/tsvpn/watchdog.log ] && wn "watchdog has acted: $(grep -c '^==' /etc/tsvpn/watchdog.log) time(s), last: $(grep '^==' /etc/tsvpn/watchdog.log | tail -1 | cut -c4-60) — see /etc/tsvpn/watchdog.log"
 grep -q "/etc/tsvpn" /etc/sysupgrade.conf 2>/dev/null && ok "/etc/tsvpn listed in sysupgrade.conf" || wn "/etc/tsvpn not in sysupgrade.conf (bootstrap still covers it)"
 [ -f "$TSVPN_LOG" ] && inf "last self-heal: $(head -1 "$TSVPN_LOG" 2>/dev/null)" || wn "no $TSVPN_LOG yet (written at boot)"
 
@@ -84,6 +87,14 @@ BSTATE=$(tailscale status --json 2>/dev/null | jsonfilter -e '@.BackendState' 2>
 TSIP=$(tailscale ip -4 2>/dev/null | head -1)
 [ -n "$TSIP" ] && ok "tailnet address $TSIP" || no "no tailnet address — node logged out, needs ON-SITE re-auth (first-time setup: scripts/glinet/README.md section 2)"
 PREFS=$(tailscale debug prefs 2>/dev/null)
+TSPID=$(pidof tailscaled | cut -d' ' -f1)
+if [ -n "$TSPID" ] && tr '\0' '\n' < /proc/$TSPID/environ 2>/dev/null | grep -q '^GOMEMLIMIT='; then
+	ok "tailscaled memory-capped ($(tr '\0' '\n' < /proc/$TSPID/environ | grep ^GOMEMLIMIT=), using $(awk '/VmRSS/{print int($2/1024)}' /proc/$TSPID/status) MB)"
+else
+	no "tailscaled has no GOMEMLIMIT — under load it can exhaust memory and hang (2026-11-06)"
+fi
+MA=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
+[ "${MA:-0}" -ge 60 ] && ok "memory available: ${MA} MB" || wn "only ${MA} MB memory available — close to the edge"
 
 echo
 echo "-- firewall (sections 3.3, 3.4) --"

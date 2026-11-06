@@ -15,6 +15,10 @@
 #    lockdown   <100.x>                    close WAN-side SSH; admin only via the tunnel
 #    wifi       <addr> <ssid> <key>        set the client WiFi (2.4G = ssid, 5G = ssid-5g)
 #    test       <addr>                     end-to-end exit-node test (remote)
+#    speed      <tailnet> [node...] [--secs N] [--streams N]
+#                                          throughput: host internet, each remote's
+#                                          own internet, the tunnel, and what its
+#                                          clients can get; names the bottleneck
 #    audit      <addr>                     run the installed audit
 #    reinstall-remotes <tailnet>           re-push every remote (after a host rebuild)
 #
@@ -249,6 +253,88 @@ test)
 
 audit)
 	rsh "$1" /etc/tsvpn/tsvpn-audit.sh
+	;;
+
+speed)
+	TN=$1; shift || die "usage: speed <tailnet> [node...] [--secs N] [--streams N]"
+	H=$(host_json "$TN") || die "no host in $NETS/$TN"
+	HIP=$(jget "$H" tailnet_ip); [ -n "$HIP" ] || die "no tailnet_ip in $H"
+	SECS=8; STR=4; ONLY=""
+	while [ $# -gt 0 ]; do
+		case "$1" in --secs) SECS=$2; shift 2 ;; --streams) STR=$2; shift 2 ;; *) ONLY="$ONLY $1"; shift ;; esac
+	done
+	ST="$HERE/tsvpn-speedtest.sh"
+	sp() { a=$1; shift; rsh "$a" "sh -s -- $*" < "$ST"; }   # never depends on the installed copy
+	# The host carries every remote's internet: stop the moment it struggles.
+	alive() {
+		rsh "$HIP" "tailscale status --json | jsonfilter -e '@.BackendState'" 2>/dev/null | grep -q Running && return 0
+		echo; echo "!!! host $HIP stopped answering — aborting the speed test. Remotes depend on it."
+		echo "!!! the watchdog restarts tailscale within ~6 min; else power-cycle the host."; exit 4
+	}
+	val() { echo "$1" | tr ' ' '\n' | sed -n "s/^$2=//p" | tail -1; }
+	echo "Saturates each line for ~$((SECS * 6))s per remote: video at that site will stutter meanwhile."
+	echo "Uses roughly 1-2 GB of data per remote (matters on a capped plan)."
+	echo
+	say "host $(jget "$H" node) — its own internet"
+	O=$(sp "$HIP" inet direct "$STR" "$SECS"); echo "$O" | grep -v '^RESULT'
+	HR=$(echo "$O" | sed -n 's/^RESULT //p' | tr '\n' ' ')
+	for f in "$NETS/$TN"/*.json; do
+		[ "$(jget "$f" role)" = remote ] || continue
+		N=$(jget "$f" node); RIP=$(jget "$f" tailnet_ip)
+		[ -z "$ONLY" ] || echo " $ONLY " | grep -q " $N " || continue
+		[ -n "$RIP" ] || { echo "skip $N: no tailnet_ip"; continue; }
+		echo; say "remote $N ($RIP)"
+		alive
+		O=$(sp "$RIP" inet direct "$STR" "$SECS")
+		for d in down up; do
+			alive; sp "$HIP" iperf-server $((SECS + 30)) >/dev/null
+			O="$O
+$(sp "$RIP" iperf "$HIP" "$d" "$STR" "$SECS")"
+		done
+		alive
+		O="$O
+$(sp "$RIP" inet tunnel "$STR" "$SECS")"
+		alive
+		echo "$O" | grep -v '^RESULT'
+		R=$(echo "$O" | sed -n 's/^RESULT //p' | tr '\n' ' ')
+		python3 - "$N" "$HR" "$R" <<'PY'
+import sys
+name, hr, rr = sys.argv[1:4]
+kv = lambda t: dict(x.split("=", 1) for x in t.split() if "=" in x)
+h, r = kv(hr), kv(rr)
+g = lambda d, k: int(d.get(k, 0) or 0)
+pegged = lambda d, k: g(d, k + "_cpu") >= 85      # CPU-bound test = a floor, not the line rate
+fmt = lambda d, k: "FAILED" if g(d, k) < 0 else ((">=" if pegged(d, k) else "") + str(g(d, k)))
+print()
+print("   %-40s %8s %8s" % ("SUMMARY " + name + " (Mbit/s)", "down", "up"))
+for label, d, k in [("host internet (router-measured)", h, "direct"),
+                    (name + "'s own internet, direct", r, "direct"),
+                    ("tunnel only, host <-> " + name, r, "tunnel"),
+                    ("router's own traffic via exit node *", r, "exit")]:
+    print("   %-40s %8s %8s" % (label, fmt(d, k + "_down"), fmt(d, k + "_up")))
+# Clients do their own HTTPS, so the router only forwards + encrypts: the
+# tunnel figure, capped by the remote's own line and the host's, is their ceiling.
+for dirn in ("down", "up"):
+    c = {"tunnel": g(r, "tunnel_" + dirn), name + "'s own internet": g(r, "direct_" + dirn),
+         "host internet": g(h, "direct_" + dirn)}
+    if c["tunnel"] <= 0:
+        print("   => %s: tunnel test FAILED, no conclusion (re-run: speed <tailnet> %s)" % (dirn, name))
+        continue
+    c = {k: v for k, v in c.items() if v > 0}
+    lim = min(c, key=c.get); v = c[lim]
+    why = lim
+    if lim == "tunnel" and (g(r, "tunnel_%s_cpu" % dirn) >= 85):
+        why = "router CPU (WireGuard encryption)"
+    if dirn == "down":
+        print("   => clients can get about %d Mbit/s down; limit: %s" % (v, why))
+        print("      room for ~%d simultaneous 4K streams (25 Mbit/s) or ~%d HD (8 Mbit/s)" % (v // 25, v // 8))
+    else:
+        print("   => clients can send about %d Mbit/s up; limit: %s" % (v, why))
+print("   * the router doing HTTPS + encryption at once; understates what clients get")
+print("   The host forwards ALL remotes through one CPU: their total is about the tunnel")
+print("   figure, so remotes streaming at once share it, and none can saturate the host's line.")
+PY
+	done
 	;;
 
 reinstall-remotes)

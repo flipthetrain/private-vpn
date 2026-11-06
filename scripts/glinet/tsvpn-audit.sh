@@ -155,15 +155,19 @@ if [ "$ROLE" = "host" ]; then
 	echo
 	echo "-- host dns (section 3.5: resolves via its own network) --"
 	[ "$(uci -q get dhcp.@dnsmasq[0].localservice)" = "0" ] && ok "localservice=0 (answers tailnet peers over a /32)" || no "localservice not 0 — remote routers get NO DNS from this host"
-	grep -q "^no-resolv" "$DNSCONF" 2>/dev/null && no "no-resolv set on the host — it must use its own network's resolver" || ok "no-resolv absent (uses the WAN DHCP resolver)"
+	if [ -n "$DNS_UPSTREAM" ]; then
+		grep -q "^no-resolv" "$DNSCONF" 2>/dev/null && ok "no-resolv set: only node.json dns_upstream is used, not the WAN DHCP resolver" || no "no-resolv missing — the WAN DHCP resolver is still used alongside dns_upstream"
+	else
+		grep -q "^no-resolv" "$DNSCONF" 2>/dev/null && no "no-resolv set on the host — it must use its own network's resolver" || ok "no-resolv absent (uses the WAN DHCP resolver)"
+	fi
 	SRV=$(grep "^server=" "$DNSCONF" 2>/dev/null | sed 's/^server=//' | sort | tr '\n' ' ')
 	WANT=$(for s in $DNS_UPSTREAM; do echo "$s"; done | sort | tr '\n' ' ')
 	if [ "$SRV" = "$WANT" ]; then
-		[ -n "$SRV" ] && ok "site-local fallback resolver(s) from node.json: $SRV" || ok "no hardcoded upstream"
+		[ -n "$SRV" ] && ok "site-local resolver(s) from node.json: $SRV" || ok "no hardcoded upstream"
 	else
 		wn "dnsmasq upstreams ($SRV) differ from node.json dns_upstream ($WANT)"
 	fi
-	inf "upstream: $(sed -n 's/^nameserver //p' /tmp/resolv.conf.d/resolv.conf.auto 2>/dev/null | tr '\n' ' ')"
+	[ -z "$DNS_UPSTREAM" ] && inf "upstream: $(sed -n 's/^nameserver //p' /tmp/resolv.conf.d/resolv.conf.auto 2>/dev/null | tr '\n' ' ')"
 else
 	echo "-- remote role --"
 	[ "$(uci -q get firewall.tailscale0.masq)" = "1" ] && ok "tailscale0 masq=1 (3.3 — or nothing behind this router works)" || no "masq NOT set — this router works, clients behind it do not"
